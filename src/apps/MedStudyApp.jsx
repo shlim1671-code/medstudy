@@ -2257,12 +2257,12 @@ function ManagePage({ data, updateData, showToast }) {
     q.needs_review || q.status === "conflict" || q.status === "unstable_parse"
   );
   const tabs = [
-    ["cards", `카드 (${(data.cards || []).length})`],
-    ["questions", `문제 (${(data.questions || []).length})`],
-    ["pdf_process", "PDF 처리"],
-    ["review_queue", `검토 대기${reviewQueueQ.length > 0 ? ` (${reviewQueueQ.length})` : ""}`],
-    ["professors", `교수 (${(data.professors || []).length})`],
+    ["cards", "카드"],
+    ["questions", "문제"],
+    ["review_queue", "검토대기"],
+    ["professors", "교수"],
     ["migrate", "마이그레이션"],
+    ["pdf_process", "PDF 처리"],
   ];
 
   return (
