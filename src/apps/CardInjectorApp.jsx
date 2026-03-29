@@ -56,15 +56,150 @@ function normalizeIntent(raw) {
 const INGESTION_BATCH_ID = uid();
 
 const C = {
-  bg: "#141c28", surface: "#1e2d42", border: "#304060",
-  text: "#e4edf8", muted: "#92a4be",
-  primary: "#6aafe6", success: "#5dc87e", danger: "#e07070", warning: "#cdb94a",
+  bg:         "#161210",
+  surface:    "#1e1c18",
+  surface2:   "#252219",
+  border:     "#2a2720",
+  text:       "#f0ebe0",
+  muted:      "#6b6256",
+  primary:    "#a07850",
+  success:    "#6aac5c",
+  danger:     "#d4745a",
+  warning:    "#c4963a",
+  paper:      "#f8f3ea",
+  paperText:  "#2c2520",
+  paperMuted: "#8a7f6e",
+  dangerBg:   "#3d1f1a",
+  successBg:  "#1a2e1c",
+  primaryBg:  "#2a2218",
 };
+const FONT_HEADING = "'Playfair Display', Georgia, serif";
+const FONT_BODY    = "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif";
+
 const S = {
-  card: { background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, padding: 16, marginBottom: 12 },
-  btn: (v = "primary") => ({ padding: "9px 18px", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 13, background: v === "primary" ? C.primary : v === "success" ? C.success : v === "danger" ? C.danger : "#263350", color: (v === "default") ? C.text : "#111a28" }),
-  input: { background: "#263350", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 14, width: "100%", boxSizing: "border-box" },
-  label: { fontSize: 12, color: C.muted, marginBottom: 4, display: "block", fontWeight: 500 },
+  card: {
+    background:   C.surface,
+    borderRadius: 14,
+    border:       `1px solid ${C.border}`,
+    padding:      "18px 20px",
+    marginBottom: 10,
+  },
+  flashcard: {
+    background:   C.paper,
+    borderRadius: 20,
+    border:       "none",
+    padding:      "32px 28px 24px",
+    marginBottom: 14,
+  },
+  cardInset: {
+    background:   C.surface2,
+    borderRadius: 10,
+    border:       `1px solid ${C.border}`,
+    padding:      "10px 14px",
+    marginBottom: 8,
+  },
+  btn: (v = "primary") => ({
+    padding:      "11px 20px",
+    borderRadius: 10,
+    border:       "none",
+    cursor:       "pointer",
+    fontWeight:   700,
+    fontSize:     13,
+    fontFamily:   FONT_BODY,
+    letterSpacing:"0.04em",
+    transition:   "filter 0.12s, transform 0.06s",
+    background:
+      v === "primary" ? C.primary :
+      v === "success" ? C.successBg :
+      v === "danger"  ? C.dangerBg :
+      C.surface2,
+    color:
+      v === "primary" ? "#1a1108" :
+      v === "success" ? C.success :
+      v === "danger"  ? C.danger  :
+      C.text,
+  }),
+  btnAction: (v = "forgot") => ({
+    flex:          1,
+    padding:       "16px 8px",
+    borderRadius:  14,
+    border:        "none",
+    cursor:        "pointer",
+    fontFamily:    FONT_BODY,
+    fontWeight:    700,
+    fontSize:      12,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    display:       "flex",
+    flexDirection: "column",
+    alignItems:    "center",
+    gap:           6,
+    background:    v === "forgot" ? C.dangerBg  : C.successBg,
+    color:         v === "forgot" ? C.danger     : C.success,
+  }),
+  input: {
+    background:  C.surface2,
+    border:      `1px solid ${C.border}`,
+    borderRadius: 10,
+    padding:     "9px 14px",
+    color:       C.text,
+    fontSize:    14,
+    fontFamily:  FONT_BODY,
+    width:       "100%",
+    boxSizing:   "border-box",
+    outline:     "none",
+  },
+  label: {
+    fontSize:      11,
+    color:         C.muted,
+    marginBottom:  4,
+    display:       "block",
+    fontWeight:    700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    fontFamily:    FONT_BODY,
+  },
+  badge: (col = C.primary) => {
+    const bg =
+      col === C.danger  ? C.dangerBg  :
+      col === C.success ? C.successBg :
+      col === C.primary ? C.primaryBg :
+      col + "22";
+    return {
+      background:    bg,
+      color:         col,
+      padding:       "3px 9px",
+      borderRadius:  6,
+      fontSize:      10,
+      fontWeight:    700,
+      letterSpacing: "0.08em",
+      textTransform: "uppercase",
+      display:       "inline-block",
+      fontFamily:    FONT_BODY,
+    };
+  },
+  badgePaper: (col = "#b84a2e", bg = "#f5e0da") => ({
+    background:    bg,
+    color:         col,
+    padding:       "3px 9px",
+    borderRadius:  6,
+    fontSize:      10,
+    fontWeight:    700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    display:       "inline-block",
+    fontFamily:    FONT_BODY,
+  }),
+  sectionLabel: {
+    fontSize:      10,
+    fontWeight:    700,
+    color:         C.muted,
+    textTransform: "uppercase",
+    letterSpacing: "0.1em",
+    marginBottom:  8,
+    display:       "block",
+    fontFamily:    FONT_BODY,
+  },
 };
 
 const TEMPLATE_FIELDS = {
@@ -83,6 +218,13 @@ export default function CardInjectorApp() {
   const [professors, setProfessors] = useState([]);
 
   useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Noto+Sans+KR:wght@400;500;700&display=swap";
+    document.head.appendChild(link);
+  }, []);
+
+  useEffect(() => {
     async function load() {
       const [e, p] = await Promise.all([sGet(SK.exams), sGet(SK.professors)]);
       setExams(e || []);
@@ -99,20 +241,20 @@ export default function CardInjectorApp() {
   const navTabs = [["card", "카드 주입"], ["question", "문제 주입"], ["json_bulk", "JSON 일괄입력"], ["image_link", "이미지 URL 연결"], ["migrate", "마이그레이션"]];
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "system-ui, sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: FONT_BODY }}>
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "12px 20px" }}>
-        <div style={{ fontWeight: 700, fontSize: 16, color: C.primary }}>카드/문제 주입기</div>
+        <div style={{ fontFamily: FONT_HEADING, fontWeight: 700, fontSize: 17, color: C.text }}>카드/문제 주입기</div>
       </div>
 
       {toast && (
-        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, padding: "10px 16px", borderRadius: 8, background: toast.type === "error" ? C.danger : C.success, color: "#1a1f2e", fontWeight: 600, fontSize: 14 }}>
+        <div style={{ position: "fixed", top: 60, right: 20, zIndex: 999, padding: "10px 16px", borderRadius: 10, background: toast.type === "error" ? C.dangerBg : C.successBg, color: toast.type === "error" ? C.danger : C.success, fontWeight: 700, fontSize: 13, border: `1px solid ${toast.type === "error" ? C.danger : C.success}`, fontFamily: FONT_BODY }}>
           {toast.msg}
         </div>
       )}
 
-      <div style={{ display: "flex", background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", overflowX: "auto", background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 4px" }}>
         {navTabs.map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} style={{ padding: "10px 18px", background: "none", border: "none", cursor: "pointer", color: tab === t ? C.primary : C.muted, fontWeight: tab === t ? 700 : 400, borderBottom: `2px solid ${tab === t ? C.primary : "transparent"}`, fontSize: 13 }}>
+          <button key={t} onClick={() => setTab(t)} style={{ padding: "10px 18px", background: "none", border: "none", cursor: "pointer", color: tab === t ? C.primary : C.text, fontWeight: tab === t ? 700 : 500, borderBottom: `2px solid ${tab === t ? C.primary : "transparent"}`, fontSize: 13 }}>
             {label}
           </button>
         ))}

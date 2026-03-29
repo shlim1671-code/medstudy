@@ -410,70 +410,150 @@ function getDangerCardIds(reviewLog) {
 // Design Tokens — Phase 7B-2
 // ─────────────────────────────────────────
 const C = {
-  bg:       "#141c28",
-  surface:  "#1e2d42",   // slightly brighter — better bg/card separation
-  surface2: "#263350",   // nested surface
-  border:   "#304060",   // brighter border — cards pop more
-  text:     "#e4edf8",   // slightly brighter for faster scanning
-  muted:    "#92a4be",   // a touch brighter than before
-  primary:  "#6aafe6",
-  success:  "#5dc87e",
-  danger:   "#e07070",
-  warning:  "#cdb94a",
+  bg:         "#161210",
+  surface:    "#1e1c18",
+  surface2:   "#252219",
+  border:     "#2a2720",
+  text:       "#f0ebe0",
+  muted:      "#6b6256",
+  primary:    "#a07850",
+  success:    "#6aac5c",
+  danger:     "#d4745a",
+  warning:    "#c4963a",
+  paper:      "#f8f3ea",
+  paperText:  "#2c2520",
+  paperMuted: "#8a7f6e",
+  dangerBg:   "#3d1f1a",
+  successBg:  "#1a2e1c",
+  primaryBg:  "#2a2218",
 };
+
+const FONT_HEADING = "'Playfair Display', Georgia, serif";
+const FONT_BODY    = "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif";
 
 const S = {
   card: {
-    background: C.surface,
-    borderRadius: 10,
-    border: `1px solid ${C.border}`,
-    padding: "16px 18px",
-    marginBottom: 12,
+    background:   C.surface,
+    borderRadius: 14,
+    border:       `1px solid ${C.border}`,
+    padding:      "18px 20px",
+    marginBottom: 10,
+  },
+  flashcard: {
+    background:   C.paper,
+    borderRadius: 20,
+    border:       "none",
+    padding:      "32px 28px 24px",
+    marginBottom: 14,
   },
   cardInset: {
-    background: C.surface2,
-    borderRadius: 8,
-    border: `1px solid ${C.border}`,
-    padding: "10px 14px",
+    background:   C.surface2,
+    borderRadius: 10,
+    border:       `1px solid ${C.border}`,
+    padding:      "10px 14px",
     marginBottom: 8,
   },
   btn: (v = "primary") => ({
-    padding: "9px 18px", borderRadius: 8, border: "none", cursor: "pointer",
-    fontWeight: 600, fontSize: 13,
-    background: v === "primary" ? C.primary
-              : v === "success"  ? C.success
-              : v === "danger"   ? C.danger
-              : C.surface2,
-    color: (v === "default" || v === "muted") ? C.text : "#111a28",
+    padding:      "11px 20px",
+    borderRadius: 10,
+    border:       "none",
+    cursor:       "pointer",
+    fontWeight:   700,
+    fontSize:     13,
+    fontFamily:   FONT_BODY,
+    letterSpacing:"0.04em",
+    transition:   "filter 0.12s, transform 0.06s",
+    background:
+      v === "primary" ? C.primary :
+      v === "success" ? C.successBg :
+      v === "danger"  ? C.dangerBg :
+      C.surface2,
+    color:
+      v === "primary" ? "#1a1108" :
+      v === "success" ? C.success :
+      v === "danger"  ? C.danger  :
+      C.text,
+  }),
+  btnAction: (v = "forgot") => ({
+    flex:          1,
+    padding:       "16px 8px",
+    borderRadius:  14,
+    border:        "none",
+    cursor:        "pointer",
+    fontFamily:    FONT_BODY,
+    fontWeight:    700,
+    fontSize:      12,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    display:       "flex",
+    flexDirection: "column",
+    alignItems:    "center",
+    gap:           6,
+    background:    v === "forgot" ? C.dangerBg  : C.successBg,
+    color:         v === "forgot" ? C.danger     : C.success,
   }),
   input: {
-    background: C.surface2,
-    border: `1px solid ${C.border}`,
-    borderRadius: 8,
-    padding: "8px 12px",
-    color: C.text,
-    fontSize: 14,
-    width: "100%",
-    boxSizing: "border-box",
+    background:  C.surface2,
+    border:      `1px solid ${C.border}`,
+    borderRadius: 10,
+    padding:     "9px 14px",
+    color:       C.text,
+    fontSize:    14,
+    fontFamily:  FONT_BODY,
+    width:       "100%",
+    boxSizing:   "border-box",
+    outline:     "none",
   },
-  label: { fontSize: 12, color: C.muted, marginBottom: 4, display: "block", fontWeight: 500 },
-  badge: (col = C.primary) => ({
-    background: col + "28",
-    color: col,
-    padding: "2px 8px",
-    borderRadius: 9999,
-    fontSize: 11,
-    fontWeight: 600,
-    display: "inline-block",
+  label: {
+    fontSize:      11,
+    color:         C.muted,
+    marginBottom:  4,
+    display:       "block",
+    fontWeight:    700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    fontFamily:    FONT_BODY,
+  },
+  badge: (col = C.primary) => {
+    const bg =
+      col === C.danger  ? C.dangerBg  :
+      col === C.success ? C.successBg :
+      col === C.primary ? C.primaryBg :
+      col + "22";
+    return {
+      background:    bg,
+      color:         col,
+      padding:       "3px 9px",
+      borderRadius:  6,
+      fontSize:      10,
+      fontWeight:    700,
+      letterSpacing: "0.08em",
+      textTransform: "uppercase",
+      display:       "inline-block",
+      fontFamily:    FONT_BODY,
+    };
+  },
+  badgePaper: (col = "#b84a2e", bg = "#f5e0da") => ({
+    background:    bg,
+    color:         col,
+    padding:       "3px 9px",
+    borderRadius:  6,
+    fontSize:      10,
+    fontWeight:    700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    display:       "inline-block",
+    fontFamily:    FONT_BODY,
   }),
   sectionLabel: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: C.muted,
+    fontSize:      10,
+    fontWeight:    700,
+    color:         C.muted,
     textTransform: "uppercase",
-    letterSpacing: "0.07em",
-    marginBottom: 8,
-    display: "block",
+    letterSpacing: "0.1em",
+    marginBottom:  8,
+    display:       "block",
+    fontFamily:    FONT_BODY,
   },
 };
 
@@ -535,6 +615,13 @@ export default function MedStudyApp() {
   });
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Noto+Sans+KR:wght@400;500;700&display=swap";
+    document.head.appendChild(link);
+  }, []);
 
   useEffect(() => { init(); }, []);
 
@@ -713,11 +800,11 @@ export default function MedStudyApp() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: 14 }}>
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: FONT_BODY, fontSize: 14 }}>
       {/* Header */}
-      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: C.text, letterSpacing: "-0.01em" }}>
-          MedStudy <span style={{ color: C.primary }}>AI</span>
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
+        <div style={{ fontFamily: FONT_HEADING, fontWeight: 700, fontSize: 17, color: C.text, letterSpacing: "-0.01em" }}>
+          MedStudy AI
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {dueCount > 0 && (
@@ -738,13 +825,13 @@ export default function MedStudyApp() {
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: "fixed", top: 60, right: 20, zIndex: 999, padding: "10px 16px", borderRadius: 8, background: toast.type === "error" ? C.danger : C.success, color: "#1a1f2e", fontWeight: 600, fontSize: 14, boxShadow: "0 4px 12px rgba(0,0,0,0.4)" }}>
+        <div style={{ position: "fixed", top: 60, right: 20, zIndex: 999, padding: "10px 16px", borderRadius: 10, background: toast.type === "error" ? C.dangerBg : C.successBg, color: toast.type === "error" ? C.danger : C.success, fontWeight: 700, fontSize: 13, border: `1px solid ${toast.type === "error" ? C.danger : C.success}`, fontFamily: FONT_BODY }}>
           {toast.msg}
         </div>
       )}
 
       {/* Nav — primary actions | secondary tools */}
-      <div style={{ display: "flex", overflowX: "auto", background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", overflowX: "auto", background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 4px" }}>
         {navItems.map((n, i) => {
           const isPrimary = navPrimary.some(p => p.id === n.id);
           const isActive  = page === n.id;
@@ -765,7 +852,7 @@ export default function MedStudyApp() {
                   color: isActive ? C.primary : isPrimary ? C.text : C.muted,
                   fontWeight: isActive ? 700 : isPrimary ? 500 : 400,
                   borderBottom: `2px solid ${isActive ? C.primary : "transparent"}`,
-                  fontSize: isPrimary ? 13 : 12,
+                  fontSize: 13,
                   whiteSpace: "nowrap",
                   opacity: !isPrimary && !isActive ? 0.8 : 1,
                 }}>
@@ -1185,9 +1272,9 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
       {/* Progress + metadata row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, fontSize: 12, color: C.muted }}>
         <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-          <span style={S.badge(stateColors[cardState] || C.muted)}>{cardState}</span>
-          {isDangerCard && <span style={S.badge(C.danger)}>위험</span>}
-          <span style={S.badge(importance >= 3 ? C.danger : importance >= 1.5 ? C.warning : C.muted)}>imp {importance.toFixed(1)}</span>
+          <span style={S.badgePaper("#8a7f6e", "#ece8de")}>{cardState}</span>
+          {isDangerCard && <span style={S.badgePaper("#b84a2e", "#f5e0da")}>위험</span>}
+          <span style={S.badgePaper("#5a7a52", "#e8eee6")}>imp {importance.toFixed(1)}</span>
         </div>
         <span style={{ fontWeight: 500 }}>{(current + 1)} / {sessionCards.length}</span>
       </div>
@@ -1199,25 +1286,29 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
       <div
         onClick={() => { if (!flipped) setFlipped(true); }}
         style={{
-          ...S.card,
+          ...S.flashcard,
           minHeight: 200,
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",
           textAlign: "center",
           cursor: flipped ? "default" : "pointer",
-          borderLeft: isDangerCard ? `3px solid ${C.danger}` : undefined,
-          padding: "24px 20px",
+          borderLeft: "none",
         }}
       >
-        <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, letterSpacing: "0.04em" }}>
+        <div style={{ fontSize: 11, color: C.paperMuted, marginBottom: 10, letterSpacing: "0.04em", fontFamily: FONT_BODY }}>
           {card.subject}{card.chapter ? " · " + card.chapter : ""}
         </div>
-        <div style={{ fontSize: flipped ? 17 : 19, fontWeight: 600, lineHeight: 1.65, color: flipped ? C.primary : C.text }}>
-          {flipped ? card.back : card.front}
-        </div>
+        {!flipped && <div style={{ fontFamily: FONT_HEADING, fontSize: 19, fontWeight: 700, lineHeight: 1.6, color: C.paperText, textAlign: "center", marginBottom: 20, wordBreak: "keep-all" }}>{card.front}</div>}
+        {flipped && (
+          <>
+            <div style={{ fontFamily: FONT_HEADING, fontSize: 19, fontWeight: 700, lineHeight: 1.6, color: C.paperText, textAlign: "center", marginBottom: 20, wordBreak: "keep-all" }}>{card.front}</div>
+            <hr style={{ border: "none", borderTop: "1px solid #e4ddd1", margin: "0 8px 18px", width: "100%" }} />
+            <div style={{ fontFamily: FONT_BODY, fontSize: 15, color: "#5a5048", lineHeight: 1.65, textAlign: "center", marginBottom: 12 }}>{card.back}</div>
+          </>
+        )}
         <CardImage image_url={card.image_url} image_present={card.image_present} image_ref={card.image_ref} />
         {flipped && card.explanations && card.explanations.quick && (
-          <div style={{ marginTop: 14, fontSize: 12, color: C.muted, maxWidth: 440, lineHeight: 1.6, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+          <div style={{ background: "#f2ece0", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#9a9082", lineHeight: 1.6, textAlign: "center", fontFamily: FONT_BODY, marginTop: 10, maxWidth: 440 }}>
             {card.explanations.quick}
           </div>
         )}
@@ -1227,20 +1318,15 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
       </div>
       {/* Grade buttons — only shown after flip */}
       {flipped && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginTop: 12 }}>
-          {[
-            { label: "모름",   grade: 0, variant: "danger"  },
-            { label: "어려움", grade: 1, variant: "default" },
-            { label: "알겠음", grade: 2, variant: "primary" },
-            { label: "쉬움",   grade: 3, variant: "success" },
-          ].map(({ label, grade, variant }) => (
-            <button
-              key={grade}
-              style={{ ...S.btn(variant), textAlign: "center", padding: "10px 4px" }}
-              onClick={() => reviewGrade(grade)}>
-              {label}
-            </button>
-          ))}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
+          <button style={S.btnAction("forgot")} onClick={() => reviewGrade(0)}>
+            <span style={{ fontSize: 20 }}>✕</span>
+            <span>잊었어요</span>
+          </button>
+          <button style={S.btnAction("mem")} onClick={() => reviewGrade(3)}>
+            <span style={{ fontSize: 20 }}>✓</span>
+            <span>기억해요</span>
+          </button>
         </div>
       )}
     </div>
@@ -1338,11 +1424,18 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
       </div>
 
       <div
-        style={{ ...S.card, minHeight: 190, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", cursor: flipped ? "default" : "pointer" }}
+        style={{ ...S.flashcard, minHeight: 190, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", cursor: flipped ? "default" : "pointer" }}
         onClick={() => { if (!flipped) setFlipped(true); }}
       >
-        <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{card.subject} · {card.chapter}</div>
-        <div style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.6 }}>{flipped ? card.back : card.front}</div>
+        <div style={{ fontSize: 11, color: C.paperMuted, marginBottom: 8, fontFamily: FONT_BODY }}>{card.subject} · {card.chapter}</div>
+        {!flipped && <div style={{ fontFamily: FONT_HEADING, fontSize: 19, fontWeight: 700, lineHeight: 1.6, color: C.paperText, textAlign: "center", marginBottom: 20, wordBreak: "keep-all" }}>{card.front}</div>}
+        {flipped && (
+          <>
+            <div style={{ fontFamily: FONT_HEADING, fontSize: 19, fontWeight: 700, lineHeight: 1.6, color: C.paperText, textAlign: "center", marginBottom: 20, wordBreak: "keep-all" }}>{card.front}</div>
+            <hr style={{ border: "none", borderTop: "1px solid #e4ddd1", margin: "0 8px 18px", width: "100%" }} />
+            <div style={{ fontFamily: FONT_BODY, fontSize: 15, color: "#5a5048", lineHeight: 1.65, textAlign: "center", marginBottom: 12 }}>{card.back}</div>
+          </>
+        )}
         <CardImage image_url={card.image_url} image_present={card.image_present} image_ref={card.image_ref} />
         {!flipped && <div style={{ marginTop: 14, fontSize: 12, color: C.muted }}>탭하여 답 확인</div>}
       </div>
@@ -1350,10 +1443,14 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
 
       {flipped && (
         <div style={{ display: "flex", gap: 8 }}>
-          <button style={{ ...S.btn("danger"), flex: 1 }} onClick={() => grade(0)}>다시</button>
-          <button style={{ ...S.btn("default"), flex: 1 }} onClick={() => grade(1)}>어려움</button>
-          <button style={{ ...S.btn(), flex: 1 }} onClick={() => grade(2)}>알겠음</button>
-          <button style={{ ...S.btn("success"), flex: 1 }} onClick={() => grade(3)}>쉬움</button>
+          <button style={S.btnAction("forgot")} onClick={() => grade(0)}>
+            <span style={{ fontSize: 20 }}>✕</span>
+            <span>잊었어요</span>
+          </button>
+          <button style={S.btnAction("mem")} onClick={() => grade(3)}>
+            <span style={{ fontSize: 20 }}>✓</span>
+            <span>기억해요</span>
+          </button>
         </div>
       )}
     </div>
