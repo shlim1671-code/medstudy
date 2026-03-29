@@ -56,6 +56,53 @@ const SOURCE_TYPE_LABELS = {
   textbook: "교과서",
   manual: "직접입력",
 };
+const SUBJECT_SLUG_MAP = {
+  해부학: "anatomy",
+  생리학: "physiology",
+  생화학: "biochemistry",
+  약리학: "pharmacology",
+  병리학: "pathology",
+  미생물학: "microbiology",
+  기타: "general",
+};
+
+const PDF_PARSE_PROMPT = `
+You are a strict data extraction engine.
+Your ONLY goal is to convert raw exam text into structured JSON.
+
+ABSOLUTE PROHIBITIONS:
+- DO NOT explain anything
+- DO NOT solve questions
+- DO NOT generate reasoning or knowledge
+- DO NOT modify wording
+
+For each question extract:
+- raw_question: full original text exactly
+- options: array of {text, correct} — correct only if answer given
+- canonicalAnswer: exact answer text if given, else null
+- type: "objective" or "subjective"
+- image_present: true if [IMAGE pXXX_iYY] marker exists
+- image_ref: marker ID (e.g. "p003_i01"), else null
+- confidence: HIGH (explicit answer) / MEDIUM (implied) / NONE (no answer)
+
+SHARED STEM RULE: duplicate full shared stem into EACH question.
+
+Return ONLY valid JSON array. No markdown, no explanation.
+`.trim();
+
+function normalizeConfidence(raw) {
+  const v = (raw || "").toString().toUpperCase();
+  if (v === "HIGH") return "high";
+  if (v === "MEDIUM") return "medium";
+  return "none";
+}
+
+function safeJsonArrayFromText(text) {
+  const cleaned = (text || "").trim().replace(/^```json/i, "").replace(/^```/, "").replace(/```$/, "").trim();
+  const parsed = JSON.parse(cleaned);
+  if (!Array.isArray(parsed)) throw new Error("Gemini 응답이 JSON 배열이 아닙니다.");
+  return parsed;
+}
 
 function inferSourceTypeFromTags(tags = []) {
   const lowered = tags.map(t => (t || "").toLowerCase());
@@ -2003,6 +2050,16 @@ function ManagePage({ data, updateData, showToast }) {
   const [tab, setTab] = useState("cards");
   const [search, setSearch] = useState("");
   const [profForm, setProfForm] = useState(null);
+  const [pdfForm, setPdfForm] = useState({
+    subjectKo: "해부학",
+    exam_unit: "",
+    source_type: "past_exam",
+    source_detail: "",
+    geminiApiKey: localStorage.getItem("medstudy:gemini-api-key") || import.meta.env.VITE_GEMINI_API_KEY || "",
+    file: null,
+  });
+  const [pdfStatus, setPdfStatus] = useState({ phase: "idle", progress: 0 });
+  const [pdfResult, setPdfResult] = useState(null);
 
   const PRESETS = {
     "past-exam-heavy": { pastExam: 5, slides: 3, textbook: 1, notes: 2 },
@@ -2069,6 +2126,126 @@ function ManagePage({ data, updateData, showToast }) {
     } catch(e) { showToast("실패: " + e.message, "error"); }
   }
 
+  async function processPdf() {
+    try {
+      if (!pdfForm.file) { showToast("PDF 파일을 선택하세요.", "error"); return; }
+      if (!pdfForm.exam_unit.trim()) { showToast("시험 단위를 입력하세요.", "error"); return; }
+      if (!pdfForm.geminiApiKey.trim()) { showToast("Gemini API 키를 입력하세요.", "error"); return; }
+      localStorage.setItem("medstudy:gemini-api-key", pdfForm.geminiApiKey.trim());
+      const subjectSlug = SUBJECT_SLUG_MAP[pdfForm.subjectKo] || "general";
+      const ingestionBatchId = `pdf_${Date.now().toString(36)}`;
+
+      setPdfStatus({ phase: "텍스트 추출 중...", progress: 15 });
+      const formData = new FormData();
+      formData.append("file", pdfForm.file);
+      formData.append("subject", subjectSlug);
+      formData.append("exam_unit", pdfForm.exam_unit.trim());
+      formData.append("source_type", pdfForm.source_type);
+      if (pdfForm.source_detail.trim()) formData.append("source_detail", pdfForm.source_detail.trim());
+
+      const pdfRes = await fetch("/api/process-pdf", { method: "POST", body: formData });
+      const pdfJson = await pdfRes.json();
+      if (!pdfRes.ok) throw new Error(pdfJson.error || "PDF 처리 실패");
+
+      setPdfStatus({ phase: "문제 구조화 중...", progress: 55 });
+      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(pdfForm.geminiApiKey.trim())}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: `${PDF_PARSE_PROMPT}\n\n=== RAW EXAM TEXT START ===\n${pdfJson.text}\n=== RAW EXAM TEXT END ===` }],
+          }],
+        }),
+      });
+      const geminiJson = await geminiRes.json();
+      const rawText = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+      const parsedItems = safeJsonArrayFromText(rawText);
+
+      setPdfStatus({ phase: "저장 중...", progress: 80 });
+      const questions = data.questions || [];
+      const cards = data.cards || [];
+      const existingQ = new Set(questions.map(q => (q.raw_question || "").trim()));
+      const existingC = new Set(cards.map(c => (c.front || "").trim()));
+      const newQuestions = [];
+      const newCards = [];
+      let unresolvedImageRefs = 0;
+
+      parsedItems.forEach(item => {
+        const rawQuestion = item.raw_question || "";
+        const imageRef = item.image_ref || null;
+        const mappedImage = imageRef ? pdfJson.imageMapping?.[imageRef] : null;
+        if (imageRef && !mappedImage?.url) unresolvedImageRefs += 1;
+
+        if ((item.type || "").toLowerCase() === "objective") {
+          if (!rawQuestion.trim() || existingQ.has(rawQuestion.trim())) return;
+          const canonicalAnswer = item.canonicalAnswer ?? null;
+          newQuestions.push({
+            id: uid(),
+            raw_question: rawQuestion,
+            parsed_question: rawQuestion,
+            options: Array.isArray(item.options) ? item.options : [],
+            canonicalAnswer,
+            status: normalizeConfidence(item.confidence) === "none" ? "unverified" : "confirmed",
+            confidence: normalizeConfidence(item.confidence),
+            confirmed_source: "ai_user",
+            question_intent: "definition",
+            occurrence_key: [subjectSlug, pdfForm.exam_unit.trim(), pdfForm.source_type].join("|"),
+            source_signature: ["", "definition", (canonicalAnswer || "").slice(0, 40)].join("||"),
+            explanations: { quick: "", professor: null, textbook: null, extra: null },
+            image_present: !!item.image_present,
+            image_ref: imageRef,
+            image_url: mappedImage?.url || null,
+            primary_concept_id: null,
+            tags: [pdfForm.source_type, subjectSlug],
+            source_type: pdfForm.source_type,
+            subject: pdfForm.subjectKo,
+            ingestion_batch_id: ingestionBatchId,
+            createdAt: new Date().toISOString(),
+          });
+          existingQ.add(rawQuestion.trim());
+          return;
+        }
+
+        if ((item.type || "").toLowerCase() === "subjective") {
+          const front = rawQuestion.trim();
+          if (!front || existingC.has(front)) return;
+          newCards.push({
+            id: uid(),
+            front,
+            back: item.canonicalAnswer || "",
+            subject: pdfForm.subjectKo,
+            chapter: "",
+            templateType: "general",
+            tier: "active",
+            source_type: pdfForm.source_type,
+            image_present: !!item.image_present,
+            image_ref: imageRef,
+            image_url: mappedImage?.url || null,
+            tags: [pdfForm.source_type, subjectSlug],
+            ingestion_batch_id: ingestionBatchId,
+            createdAt: new Date().toISOString(),
+          });
+          existingC.add(front);
+        }
+      });
+
+      if (newQuestions.length > 0) updateData("questions", [...questions, ...newQuestions]);
+      if (newCards.length > 0) updateData("cards", [...cards, ...newCards]);
+
+      setPdfStatus({ phase: "완료", progress: 100 });
+      setPdfResult({
+        questions: newQuestions.length,
+        cards: newCards.length,
+        imageCount: pdfJson.imageCount || 0,
+        unresolvedImageRefs,
+      });
+      showToast(`처리 완료: 문제 ${newQuestions.length}개 / 카드 ${newCards.length}개`);
+    } catch (e) {
+      setPdfStatus({ phase: "오류", progress: 0 });
+      showToast(`PDF 처리 실패: ${e.message}`, "error");
+    }
+  }
+
   const filteredCards = (data.cards || []).filter(c =>
     !search || (c.front || "").toLowerCase().includes(search.toLowerCase()) || (c.subject || "").toLowerCase().includes(search.toLowerCase())
   );
@@ -2082,6 +2259,7 @@ function ManagePage({ data, updateData, showToast }) {
   const tabs = [
     ["cards", `카드 (${(data.cards || []).length})`],
     ["questions", `문제 (${(data.questions || []).length})`],
+    ["pdf_process", "PDF 처리"],
     ["review_queue", `검토 대기${reviewQueueQ.length > 0 ? ` (${reviewQueueQ.length})` : ""}`],
     ["professors", `교수 (${(data.professors || []).length})`],
     ["migrate", "마이그레이션"],
@@ -2170,6 +2348,66 @@ function ManagePage({ data, updateData, showToast }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {tab === "pdf_process" && (
+        <div style={S.card}>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>PDF 자동 처리 파이프라인</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <label style={S.label}>과목</label>
+              <select style={S.input} value={pdfForm.subjectKo} onChange={e => setPdfForm(f => ({ ...f, subjectKo: e.target.value }))}>
+                {["해부학","생리학","생화학","약리학","병리학","미생물학","기타"].map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={S.label}>출처 타입</label>
+              <select style={S.input} value={pdfForm.source_type} onChange={e => setPdfForm(f => ({ ...f, source_type: e.target.value }))}>
+                <option value="past_exam">기출 (past_exam)</option>
+                <option value="slide">슬라이드 (slide)</option>
+                <option value="note">필기 (note)</option>
+                <option value="textbook">교과서 (textbook)</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <label style={S.label}>시험 단위</label>
+              <input style={S.input} value={pdfForm.exam_unit} placeholder="예: 2024_1_mid" onChange={e => setPdfForm(f => ({ ...f, exam_unit: e.target.value }))} />
+            </div>
+            <div>
+              <label style={S.label}>출처 상세 (선택)</label>
+              <input style={S.input} value={pdfForm.source_detail} placeholder="예: 2022, lecture3" onChange={e => setPdfForm(f => ({ ...f, source_detail: e.target.value }))} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <label style={S.label}>Gemini API Key</label>
+            <input style={S.input} type="password" value={pdfForm.geminiApiKey} placeholder="aistudio.google.com에서 발급" onChange={e => setPdfForm(f => ({ ...f, geminiApiKey: e.target.value }))} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={S.label}>PDF 파일</label>
+            <input type="file" accept="application/pdf" onChange={e => setPdfForm(f => ({ ...f, file: e.target.files?.[0] || null }))} />
+          </div>
+          <button style={S.btn("success")} onClick={processPdf}>처리 시작</button>
+
+          {pdfStatus.phase !== "idle" && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>{pdfStatus.phase}</div>
+              <div style={{ width: "100%", height: 8, borderRadius: 999, background: "#2b3b55", overflow: "hidden" }}>
+                <div style={{ width: `${pdfStatus.progress}%`, height: "100%", background: C.primary }} />
+              </div>
+            </div>
+          )}
+
+          {pdfResult && (
+            <div style={{ marginTop: 12, fontSize: 13 }}>
+              <div>문제 {pdfResult.questions}개 저장됨 / 카드 {pdfResult.cards}개 저장됨 / 이미지 {pdfResult.imageCount}개 업로드됨</div>
+              {pdfResult.unresolvedImageRefs > 0 && (
+                <div style={{ color: C.warning, marginTop: 4 }}>⚠️ 이미지 매핑 실패: {pdfResult.unresolvedImageRefs}건</div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

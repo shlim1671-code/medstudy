@@ -96,7 +96,7 @@ export default function CardInjectorApp() {
     setTimeout(() => setToast(null), 3000);
   }
 
-  const navTabs = [["card", "카드 주입"], ["question", "문제 주입"], ["migrate", "마이그레이션"]];
+  const navTabs = [["card", "카드 주입"], ["question", "문제 주입"], ["json_bulk", "JSON 일괄입력"], ["image_link", "이미지 URL 연결"], ["migrate", "마이그레이션"]];
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "system-ui, sans-serif" }}>
@@ -121,7 +121,195 @@ export default function CardInjectorApp() {
       <div style={{ maxWidth: 700, margin: "0 auto", padding: 20 }}>
         {tab === "card" && <CardInjector showToast={showToast} exams={exams} professors={professors} />}
         {tab === "question" && <QuestionInjector showToast={showToast} exams={exams} professors={professors} />}
+        {tab === "json_bulk" && <JsonBulkPanel showToast={showToast} />}
+        {tab === "image_link" && <ImageLinkPanel showToast={showToast} />}
         {tab === "migrate" && <MigratePanel showToast={showToast} exams={exams} professors={professors} />}
+      </div>
+    </div>
+  );
+}
+
+function toSubjectSlug(subject) {
+  const map = {
+    해부학: "anatomy",
+    생리학: "physiology",
+    생화학: "biochemistry",
+    약리학: "pharmacology",
+    병리학: "pathology",
+    미생물학: "microbiology",
+    기타: "general",
+  };
+  return map[subject] || "general";
+}
+
+function toConfidence(value) {
+  const raw = (value || "").toString().toUpperCase();
+  if (raw === "HIGH") return "high";
+  if (raw === "MEDIUM") return "medium";
+  return "none";
+}
+
+function JsonBulkPanel({ showToast }) {
+  const [jsonText, setJsonText] = useState("");
+  const [subject, setSubject] = useState("해부학");
+  const [sourceType, setSourceType] = useState("manual");
+  const [preview, setPreview] = useState(null);
+
+  function buildPreview() {
+    try {
+      const parsed = JSON.parse(jsonText || "[]");
+      if (!Array.isArray(parsed)) throw new Error("배열(JSON Array) 형식이어야 합니다.");
+      const qCount = parsed.filter(x => x.raw_question || x.options).length;
+      const cCount = parsed.filter(x => x.front || (x.type === "subjective")).length;
+      setPreview({ total: parsed.length, questions: qCount, cards: cCount });
+    } catch (e) {
+      showToast(`미리보기 실패: ${e.message}`, "error");
+    }
+  }
+
+  async function saveBulk() {
+    try {
+      const parsed = JSON.parse(jsonText || "[]");
+      if (!Array.isArray(parsed)) throw new Error("배열(JSON Array) 형식이어야 합니다.");
+      const batchId = `json_bulk_${Date.now().toString(36)}`;
+      const subjectSlug = toSubjectSlug(subject);
+      const questions = (await sGet(SK.questions)) || [];
+      const cards = (await sGet(SK.cards)) || [];
+      const existingQ = new Set(questions.map(q => (q.raw_question || "").trim()));
+      const existingC = new Set(cards.map(c => (c.front || "").trim()));
+      const newQuestions = [];
+      const newCards = [];
+
+      for (const item of parsed) {
+        const hasQuestionShape = !!(item.raw_question || item.options || item.type === "objective");
+        if (hasQuestionShape) {
+          const rawQuestion = item.raw_question || "";
+          if (!rawQuestion.trim() || existingQ.has(rawQuestion.trim())) continue;
+          const canonicalAnswer = item.canonicalAnswer ?? null;
+          const confidence = toConfidence(item.confidence);
+          newQuestions.push({
+            id: uid(),
+            raw_question: rawQuestion,
+            parsed_question: rawQuestion,
+            options: Array.isArray(item.options) ? item.options : [],
+            canonicalAnswer,
+            type: "objective",
+            status: confidence === "none" ? "unverified" : "confirmed",
+            confidence,
+            confirmed_source: "ai_user",
+            question_intent: "definition",
+            occurrence_key: [subjectSlug, "manual_bulk", sourceType].join("|"),
+            source_signature: ["", "definition", (canonicalAnswer || "").slice(0, 40)].join("||"),
+            explanations: { quick: "", professor: null, textbook: null, extra: null },
+            image_present: !!item.image_present,
+            image_ref: item.image_ref || null,
+            image_url: item.image_url || null,
+            primary_concept_id: null,
+            tags: [sourceType, subjectSlug],
+            source_type: sourceType,
+            subject,
+            ingestion_batch_id: batchId,
+            createdAt: new Date().toISOString(),
+          });
+          existingQ.add(rawQuestion.trim());
+          continue;
+        }
+
+        const front = item.front || item.raw_question || "";
+        if (!front.trim() || existingC.has(front.trim())) continue;
+        newCards.push({
+          id: uid(),
+          front,
+          back: item.back || item.canonicalAnswer || "",
+          subject: item.subject || subject,
+          chapter: "",
+          templateType: "general",
+          tier: "active",
+          source_type: item.source_type || sourceType,
+          image_present: !!item.image_present,
+          image_ref: item.image_ref || null,
+          image_url: item.image_url || null,
+          tags: [item.source_type || sourceType, subjectSlug],
+          ingestion_batch_id: batchId,
+          createdAt: new Date().toISOString(),
+        });
+        existingC.add(front.trim());
+      }
+
+      if (newQuestions.length > 0) await sSet(SK.questions, [...questions, ...newQuestions]);
+      if (newCards.length > 0) await sSet(SK.cards, [...cards, ...newCards]);
+      showToast(`저장 완료: 문제 ${newQuestions.length}개 / 카드 ${newCards.length}개`);
+    } catch (e) {
+      showToast(`저장 실패: ${e.message}`, "error");
+    }
+  }
+
+  return (
+    <div>
+      <h3 style={{ margin: "0 0 16px", color: C.primary }}>JSON 일괄입력</h3>
+      <div style={S.card}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={S.label}>과목 override</label>
+            <select style={S.input} value={subject} onChange={e => setSubject(e.target.value)}>
+              {["해부학","생리학","생화학","약리학","병리학","미생물학","기타"].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={S.label}>source_type override</label>
+            <select style={S.input} value={sourceType} onChange={e => setSourceType(e.target.value)}>
+              {SOURCE_TYPE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label} ({opt.value})</option>)}
+            </select>
+          </div>
+        </div>
+        <label style={S.label}>JSON 입력</label>
+        <textarea style={{ ...S.input, height: 220, resize: "vertical", marginBottom: 12 }} value={jsonText} onChange={e => setJsonText(e.target.value)} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={S.btn("default")} onClick={buildPreview}>미리보기</button>
+          <button style={S.btn("success")} onClick={saveBulk}>저장</button>
+        </div>
+        {preview && <div style={{ marginTop: 10, fontSize: 12, color: C.muted }}>총 {preview.total}건 · 문제 {preview.questions}건 · 카드 {preview.cards}건</div>}
+      </div>
+    </div>
+  );
+}
+
+function ImageLinkPanel({ showToast }) {
+  const [mappingText, setMappingText] = useState("{\n  \"p003_i01\": \"https://...\"\n}");
+
+  async function connectImages() {
+    try {
+      const mapping = JSON.parse(mappingText || "{}");
+      const questions = (await sGet(SK.questions)) || [];
+      const cards = (await sGet(SK.cards)) || [];
+      let linked = 0;
+      const newQ = questions.map(q => {
+        const url = q.image_ref && mapping[q.image_ref];
+        if (!url) return q;
+        linked += 1;
+        return { ...q, image_url: url, image_present: true };
+      });
+      const newC = cards.map(c => {
+        const url = c.image_ref && mapping[c.image_ref];
+        if (!url) return c;
+        linked += 1;
+        return { ...c, image_url: url, image_present: true };
+      });
+      await sSet(SK.questions, newQ);
+      await sSet(SK.cards, newC);
+      showToast(`${linked}개 항목에 image_url 연결됨`);
+    } catch (e) {
+      showToast(`연결 실패: ${e.message}`, "error");
+    }
+  }
+
+  return (
+    <div>
+      <h3 style={{ margin: "0 0 16px", color: C.primary }}>이미지 URL 연결</h3>
+      <div style={S.card}>
+        <label style={S.label}>image_ref → image_url 매핑 JSON</label>
+        <textarea style={{ ...S.input, height: 180, resize: "vertical", marginBottom: 12 }} value={mappingText} onChange={e => setMappingText(e.target.value)} />
+        <button style={S.btn("success")} onClick={connectImages}>연결 실행</button>
       </div>
     </div>
   );
