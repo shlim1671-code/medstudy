@@ -1403,33 +1403,54 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
       </div>
 
       <div
-        style={{ ...S.flashcard, minHeight: 190, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", cursor: flipped ? "default" : "pointer" }}
+        style={{
+          background: C.cardFace,
+          borderRadius: 14,
+          border: `1px solid ${C.cardBorder}`,
+          boxShadow: "0 4px 24px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.3)",
+          padding: "32px 28px",
+          marginBottom: 12,
+          minHeight: 220,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          cursor: flipped ? "default" : "pointer",
+          transition: "box-shadow 0.15s",
+        }}
         onClick={() => { if (!flipped) setFlipped(true); }}
       >
-        <div style={{ fontSize: 11, color: C.paperMuted, marginBottom: 8, fontFamily: FONT_BODY }}>{card.subject} · {card.chapter}</div>
-        {!flipped && <div style={{ fontFamily: FONT_HEADING, fontSize: 19, fontWeight: 700, lineHeight: 1.6, color: C.paperText, textAlign: "center", marginBottom: 20, wordBreak: "keep-all" }}>{card.front}</div>}
-        {flipped && (
-          <>
-            <div style={{ fontFamily: FONT_HEADING, fontSize: 19, fontWeight: 700, lineHeight: 1.6, color: C.paperText, textAlign: "center", marginBottom: 20, wordBreak: "keep-all" }}>{card.front}</div>
-            <hr style={{ border: "none", borderTop: "1px solid #e4ddd1", margin: "0 8px 18px", width: "100%" }} />
-            <div style={{ fontFamily: FONT_BODY, fontSize: 15, color: "#5a5048", lineHeight: 1.65, textAlign: "center", marginBottom: 12 }}>{card.back}</div>
-          </>
-        )}
+        <div style={{ fontSize: 11, color: "#9a8870", marginBottom: 12, fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+          {card.subject} · {card.chapter}
+        </div>
+        <div style={{
+          fontSize: flipped ? 16 : 20,
+          fontWeight: flipped ? 500 : 600,
+          lineHeight: 1.7,
+          color: C.cardText,
+          fontFamily: "'Playfair Display', Georgia, serif",
+          letterSpacing: "-0.01em",
+        }}>
+          {flipped ? card.back : card.front}
+        </div>
         <CardImage image_url={card.image_url} image_present={card.image_present} image_ref={card.image_ref} />
-        {!flipped && <div style={{ marginTop: 14, fontSize: 12, color: C.muted }}>탭하여 답 확인</div>}
+        {!flipped && (
+          <div style={{ marginTop: 18, fontSize: 11, color: "#b8a898", fontFamily: "'Noto Sans KR', sans-serif" }}>
+            탭하여 답 확인
+          </div>
+        )}
       </div>
-      <div style={{ fontSize: 12, color: C.muted, textAlign: "center", margin: "6px 0 10px" }}>{idx + 1} / {filteredCards.length}</div>
+      <div style={{ fontSize: 12, color: C.muted, textAlign: "center", margin: "6px 0 14px", fontFamily: "'Noto Sans KR', sans-serif" }}>
+        {idx + 1} / {filteredCards.length}
+      </div>
 
       {flipped && (
         <div style={{ display: "flex", gap: 8 }}>
-          <button style={S.btnAction("forgot")} onClick={() => grade(0)}>
-            <span style={{ fontSize: 20 }}>✕</span>
-            <span>잊었어요</span>
-          </button>
-          <button style={S.btnAction("mem")} onClick={() => grade(3)}>
-            <span style={{ fontSize: 20 }}>✓</span>
-            <span>기억해요</span>
-          </button>
+          <button style={{ ...S.btn("danger"), flex: 1, letterSpacing: "0.02em" }} onClick={() => grade(0)}>다시</button>
+          <button style={{ ...S.btn("default"), flex: 1, letterSpacing: "0.02em" }} onClick={() => grade(1)}>어려움</button>
+          <button style={{ ...S.btn("primary"), flex: 1, letterSpacing: "0.02em" }} onClick={() => grade(2)}>알겠음</button>
+          <button style={{ ...S.btn("success"), flex: 1, letterSpacing: "0.02em" }} onClick={() => grade(3)}>쉬움</button>
         </div>
       )}
     </div>
