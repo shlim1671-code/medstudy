@@ -1221,6 +1221,34 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
             )}
           </div>
         )}
+        {nearestDays !== null && nearestDays <= 3 && (
+          <div style={{
+            background: C.danger + "18",
+            border: `1px solid ${C.danger}`,
+            borderRadius: 10, padding: "10px 14px", marginBottom: 12,
+          }}>
+            <div style={{ fontWeight: 700, color: C.danger, fontSize: 13 }}>
+              ⚠️ D-{nearestDays} — 시험 직전 모드
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+              정확한 의학 용어로 답하세요. 유사 표현은 오답으로 처리됩니다.
+            </div>
+          </div>
+        )}
+        {nearestDays !== null && nearestDays > 3 && nearestDays <= 7 && (
+          <div style={{
+            background: C.warning + "18",
+            border: `1px solid ${C.warning}`,
+            borderRadius: 10, padding: "10px 14px", marginBottom: 12,
+          }}>
+            <div style={{ fontWeight: 700, color: C.warning, fontSize: 13 }}>
+              D-{nearestDays} — 집중 복습 권장
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+              {nearestExam && nearestExam.name} · 취약 항목 위주로 복습하세요.
+            </div>
+          </div>
+        )}
         {dueCount === 0 ? (
           <div style={S.card}>
             <div style={{ color: C.success, fontSize: 18, fontWeight: 600, marginBottom: 6 }}>복습 완료!</div>
@@ -1340,6 +1368,14 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
         )}
       </div>
       {/* Grade buttons — only shown after flip */}
+      {flipped && nearestDays !== null && nearestDays <= 3 && (
+        <div style={{
+          fontSize: 11, color: C.danger, textAlign: "center",
+          marginTop: 10, fontWeight: 600, letterSpacing: "0.04em",
+        }}>
+          시험 D-{nearestDays} · 정확한 표현으로 기억했나요?
+        </div>
+      )}
       {flipped && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
           <button style={S.btnAction("forgot")} onClick={() => reviewGrade(0)}>
