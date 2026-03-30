@@ -1354,7 +1354,18 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
           <>
             <div style={{ fontFamily: FONT_HEADING, fontSize: 19, fontWeight: 700, lineHeight: 1.6, color: C.paperText, textAlign: "center", marginBottom: 20, wordBreak: "keep-all" }}>{card.front}</div>
             <hr style={{ border: "none", borderTop: "1px solid #e4ddd1", margin: "0 8px 18px", width: "100%" }} />
-            <div style={{ fontFamily: FONT_BODY, fontSize: 15, color: "#5a5048", lineHeight: 1.65, textAlign: "center", marginBottom: 12 }}>{card.back}</div>
+            <div style={{ fontFamily: FONT_BODY, fontSize: 15, color: "#5a5048", lineHeight: 1.65, textAlign: "center", marginBottom: 12 }}>
+              {card.back}
+            </div>
+            {card.acceptedVariants && card.acceptedVariants.length > 0 && (
+              <div style={{
+                background: "#f2ece0", borderRadius: 8, padding: "8px 12px",
+                fontSize: 11, color: "#9a9082", textAlign: "center", marginBottom: 8,
+                fontFamily: FONT_BODY,
+              }}>
+                허용 표현: {card.acceptedVariants.join(" · ")}
+              </div>
+            )}
           </>
         )}
         <CardImage image_url={card.image_url} image_present={card.image_present} image_ref={card.image_ref} />
@@ -1817,6 +1828,17 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
             })}
           </div>
 
+          {revealed && item.data.canonicalAnswer && (
+            <div style={{ ...S.card, borderLeft: `3px solid ${C.primary}`, marginTop: 0, padding: "8px 14px" }}>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>표준 정답</div>
+              <div style={{ fontSize: 13, color: C.text }}>{item.data.canonicalAnswer}</div>
+              {item.data.acceptedVariants && item.data.acceptedVariants.length > 0 && (
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+                  허용 표현: {item.data.acceptedVariants.join(" · ")}
+                </div>
+              )}
+            </div>
+          )}
           {revealed && item.data.explanations && (item.data.explanations.quick || item.data.explanations.professor) && (
             <div style={{ ...S.card, borderLeft: `3px solid ${C.primary}`, marginTop: 0 }}>
               <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>해설</div>
