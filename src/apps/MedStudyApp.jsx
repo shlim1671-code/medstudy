@@ -2673,6 +2673,66 @@ function ManagePage({ data, updateData, showToast }) {
               <span>리뷰 로그: {(data.reviewLog || []).length}건</span>
             </div>
           </div>
+          {/* 배치별 롤백 */}
+          {(() => {
+            const allItems = [...(data.cards || []), ...(data.questions || [])];
+            const batchMap = {};
+            allItems.forEach(item => {
+              const bid = item.ingestion_batch_id;
+              if (!bid) return;
+              if (!batchMap[bid]) batchMap[bid] = { cards: 0, questions: 0, createdAt: item.createdAt };
+              if (item.front !== undefined) batchMap[bid].cards++;
+              else batchMap[bid].questions++;
+            });
+            const batches = Object.entries(batchMap)
+              .sort((a, b) => new Date(b[1].createdAt) - new Date(a[1].createdAt));
+            if (batches.length === 0) return null;
+            return (
+              <div style={{ ...S.card, marginBottom: 12 }}>
+                <div style={{ fontWeight: 600, marginBottom: 10 }}>📦 주입 배치 기록</div>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>
+                  파일 단위로 롤백(보관처리)할 수 있습니다.
+                </div>
+                {batches.slice(0, 10).map(([bid, info]) => (
+                  <div key={bid} style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "8px 0", borderBottom: `1px solid ${C.border}`,
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>
+                        {bid.startsWith("pdf_") ? "📄 PDF" :
+                         bid.startsWith("json_bulk_") ? "📋 JSON 일괄" :
+                         bid.startsWith("migrate_") || bid.startsWith("injector_migrate_") ? "🔄 마이그레이션" : "✏️ 수동 주입"}
+                      </div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                        카드 {info.cards}개 · 문제 {info.questions}개 · {(info.createdAt || "").slice(0, 10)}
+                      </div>
+                      <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{bid}</div>
+                    </div>
+                    <button
+                      style={{ ...S.btn("danger"), fontSize: 11, padding: "5px 10px", flexShrink: 0, marginLeft: 12 }}
+                      onClick={() => {
+                        if (!window.confirm(`배치 "${bid}"
+카드 ${info.cards}개, 문제 ${info.questions}개를 보관 처리합니다.`)) return;
+                        updateData("cards", (data.cards || []).map(c =>
+                          c.ingestion_batch_id === bid
+                            ? { ...c, status: "archived", archivedAt: new Date().toISOString() }
+                            : c
+                        ));
+                        updateData("questions", (data.questions || []).map(q =>
+                          q.ingestion_batch_id === bid
+                            ? { ...q, status: "archived_reference", needs_review: false }
+                            : q
+                        ));
+                        showToast(`롤백 완료: 카드 ${info.cards}개, 문제 ${info.questions}개 보관됨`);
+                      }}>
+                      롤백
+                    </button>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
           {data.hasLegacy && (
             <div style={S.card}>
               <div style={{ fontWeight: 600, marginBottom: 6, color: C.warning }}>⚠️ 구 custom-quiz 데이터 발견</div>
