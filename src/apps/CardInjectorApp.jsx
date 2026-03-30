@@ -683,6 +683,7 @@ function QuestionInjector({ showToast, exams, professors }) {
     explanation: "", status: "confirmed", examId: "", professorId: "",
     examYear: "", isOriginalExam: true, tags: "",
     questionIntent: "definition", conceptId: "",
+    source_type: "past_exam",
     image_url: "", image_ref: "",
   };
   const [form, setForm] = useState(blank);
@@ -808,6 +809,7 @@ function QuestionInjector({ showToast, exams, professors }) {
       examYear: form.examYear,
       professorId: form.professorId || null,
       examId: form.examId || null,
+      source_type: form.source_type || "past_exam",
       tags: form.tags.split(",").map(t => t.trim()).filter(Boolean),
       importance: 0, difficulty: 0,
       parseConfidence: "high", parseStatus: "completed",
@@ -924,6 +926,12 @@ function QuestionInjector({ showToast, exams, professors }) {
           </div>
         </div>
 
+        <div style={{ marginBottom: 12 }}>
+          <label style={S.label}>출처 유형</label>
+          <select style={S.input} value={form.source_type} onChange={e => setForm(f => ({ ...f, source_type: e.target.value }))}>
+            {SOURCE_TYPE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label} ({opt.value})</option>)}
+          </select>
+        </div>
         <div style={{ marginBottom: 12 }}>
           <label style={S.label}>태그 (쉼표 구분)</label>
           <input style={S.input} value={form.tags} placeholder="예: 기출, 신경, 중요" onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} />
