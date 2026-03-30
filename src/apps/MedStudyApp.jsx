@@ -706,7 +706,7 @@ export default function MedStudyApp() {
     const now = new Date();
     const upcoming = getUpcomingExams();
     const nearestDays = upcoming.length > 0 ? daysUntil(upcoming[0].date) : null;
-    let pool = data.cards || [];
+    let pool = (data.cards || []).filter(c => c.status !== "archived");
 
     // Phase 6: Danger-only mode
     if (lastMileMode === "danger") {
@@ -1344,7 +1344,7 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
   const subjects = ["전체", ...Array.from(new Set((data.cards || []).map(c => c.subject).filter(Boolean)))];
 
   function getFiltered() {
-    let filtered = data.cards || [];
+    let filtered = (data.cards || []).filter(c => c.status !== "archived");
     if (subject !== "전체") filtered = filtered.filter(c => c.subject === subject);
     if (examScope !== "전체") {
       const exam = (data.exams || []).find(e => e.id === examScope);
@@ -2164,6 +2164,7 @@ function StatsPage({ data }) {
 function ManagePage({ data, updateData, showToast }) {
   const [tab, setTab] = useState("cards");
   const [search, setSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [profForm, setProfForm] = useState(null);
   const [pdfForm, setPdfForm] = useState({
     subjectKo: "해부학",
@@ -2361,9 +2362,12 @@ function ManagePage({ data, updateData, showToast }) {
     }
   }
 
-  const filteredCards = (data.cards || []).filter(c =>
-    !search || (c.front || "").toLowerCase().includes(search.toLowerCase()) || (c.subject || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredCards = (data.cards || []).filter(c => {
+    if (!showArchived && c.status === "archived") return false;
+    if (!search) return true;
+    return (c.front || "").toLowerCase().includes(search.toLowerCase()) ||
+           (c.subject || "").toLowerCase().includes(search.toLowerCase());
+  });
   const filteredQ = (data.questions || []).filter(q =>
     !search || (q.parsed_question || q.raw_question || "").toLowerCase().includes(search.toLowerCase())
   );
@@ -2398,6 +2402,14 @@ function ManagePage({ data, updateData, showToast }) {
 
       {tab === "cards" && (
         <div>
+          {(data.cards || []).some(c => c.status === "archived") && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+              <button style={{ ...S.btn("default"), fontSize: 11, padding: "4px 10px" }}
+                onClick={() => setShowArchived(v => !v)}>
+                {showArchived ? "보관 숨기기" : `보관 카드 보기 (${(data.cards || []).filter(c => c.status === "archived").length})`}
+              </button>
+            </div>
+          )}
           {filteredCards.length === 0 ? (
             <div style={S.card}><div style={{ color: C.muted }}>카드 없음</div></div>
           ) : filteredCards.map(c => {
@@ -2414,7 +2426,21 @@ function ManagePage({ data, updateData, showToast }) {
                   <div style={{ fontSize: 14, marginTop: 2 }}>{c.front}</div>
                   <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{c.back}</div>
                 </div>
-                <button style={S.btn("danger")} onClick={() => { updateData("cards", (data.cards || []).filter(x => x.id !== c.id)); showToast("삭제됨"); }}>삭제</button>
+                {c.status === "archived" ? (
+                  <button style={{ ...S.btn("success"), fontSize: 11 }} onClick={() => {
+                    updateData("cards", (data.cards || []).map(x =>
+                      x.id === c.id ? { ...x, status: undefined, archivedAt: undefined } : x
+                    ));
+                    showToast("복원됨");
+                  }}>복원</button>
+                ) : (
+                  <button style={{ ...S.btn("danger"), fontSize: 11 }} onClick={() => {
+                    updateData("cards", (data.cards || []).map(x =>
+                      x.id === c.id ? { ...x, status: "archived", archivedAt: new Date().toISOString() } : x
+                    ));
+                    showToast("보관됨");
+                  }}>보관</button>
+                )}
               </div>
             );
           })}
@@ -3491,7 +3517,8 @@ function CompressionPage({ data, getUpcomingExams }) {
     // Phase 7A Task 6: strip foundation (search-only) concept cards from compression pool
     const foundationIds = getFoundationConceptIds(data.concepts);
     let cards = (data.cards || []).filter(c =>
-      !c.primary_concept_id || !foundationIds.has(c.primary_concept_id)
+      c.status !== "archived" &&
+      (!c.primary_concept_id || !foundationIds.has(c.primary_concept_id))
     );
 
     cards = filterByExamScopeTyped(cards, data.exams || [], examScope, scopeType);
