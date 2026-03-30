@@ -408,9 +408,16 @@ function JsonBulkPanel({ showToast }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <div>
             <label style={S.label}>과목 override</label>
-            <select style={S.input} value={subject} onChange={e => setSubject(e.target.value)}>
-              {["해부학","생리학","생화학","약리학","병리학","미생물학","기타"].map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <input
+              style={S.input}
+              list="subject-list-bulk"
+              value={subject}
+              placeholder="예: 해부학, 내과학, 직접 입력 가능"
+              onChange={e => setSubject(e.target.value)}
+            />
+            <datalist id="subject-list-bulk">
+              {SUBJECT_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+            </datalist>
           </div>
           <div>
             <label style={S.label}>source_type override</label>

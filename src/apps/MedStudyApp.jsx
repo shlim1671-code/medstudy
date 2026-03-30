@@ -2616,9 +2616,16 @@ function ManagePage({ data, updateData, showToast }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
             <div>
               <label style={S.label}>과목</label>
-              <select style={S.input} value={pdfForm.subjectKo} onChange={e => setPdfForm(f => ({ ...f, subjectKo: e.target.value }))}>
-                {["해부학","생리학","생화학","약리학","병리학","미생물학","기타"].map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <input
+                style={S.input}
+                list="subject-list-pdf"
+                value={pdfForm.subjectKo}
+                placeholder="예: 해부학, 내과학, 직접 입력 가능"
+                onChange={e => setPdfForm(f => ({ ...f, subjectKo: e.target.value }))}
+              />
+              <datalist id="subject-list-pdf">
+                {SUBJECT_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+              </datalist>
             </div>
             <div>
               <label style={S.label}>출처 타입</label>
