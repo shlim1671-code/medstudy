@@ -532,6 +532,24 @@ const S = {
   }),
 };
 
+// Typography helpers
+const T = {
+  heading: {
+    fontFamily: "'Playfair Display', Georgia, serif",
+    fontWeight: 700,
+    letterSpacing: "-0.02em",
+    color: C.text,
+  },
+  questionText: {
+    fontFamily: "'Playfair Display', Georgia, serif",
+    fontWeight: 500,
+    lineHeight: 1.65,
+    fontSize: 17,
+    color: C.text,
+    letterSpacing: "-0.01em",
+  },
+};
+
 // ─────────────────────────────────────────
 // CardImage — 이미지 렌더링 공용 컴포넌트
 // Rules:
@@ -782,8 +800,8 @@ export default function MedStudyApp() {
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'Noto Sans KR', system-ui, sans-serif", fontSize: 14 }}>
       {/* Header */}
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ fontFamily: FONT_HEADING, fontWeight: 700, fontSize: 17, color: C.text, letterSpacing: "-0.01em" }}>
-          MedStudy AI
+        <div style={{ fontWeight: 700, fontSize: 16, color: C.text, letterSpacing: "-0.01em", fontFamily: "'Playfair Display', Georgia, serif" }}>
+          MedStudy <span style={{ color: C.primary }}>AI</span>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {dueCount > 0 && (
@@ -1163,7 +1181,7 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
   if (!sessionCards) {
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary }}>복습</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>복습</h2>
         {modeOptions.length > 1 && (
           <div style={{ ...S.card, marginBottom: 14 }}>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>복습 모드 선택</div>
@@ -1201,7 +1219,7 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
     if (wrongItems.length > 0 && refreshClusters) refreshClusters();
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary }}>복습 완료</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>복습 완료</h2>
         <div style={S.card}>
           <div style={{ fontSize: 36, fontWeight: 700, color: acc >= 70 ? C.success : C.warning, marginBottom: 4 }}>{acc + "%"}</div>
           <div style={{ color: C.muted }}>{correct + "/" + sessionLog.length + " 정답"}</div>
@@ -1375,7 +1393,7 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
   if (filteredCards.length === 0) {
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary }}>플래시카드</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>플래시카드</h2>
         <div style={S.card}><div style={{ color: C.muted }}>카드가 없습니다. 카드 주입기로 추가하세요.</div></div>
       </div>
     );
@@ -1386,7 +1404,7 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
 
   return (
     <div>
-      <h2 style={{ margin: "0 0 16px", color: C.primary }}>플래시카드</h2>
+      <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>플래시카드</h2>
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <select value={subject} onChange={e => { setSubject(e.target.value); setCurrent(0); setFlipped(false); }} style={{ ...S.input, width: "auto" }}>
           {subjects.map(s => <option key={s} value={s}>{s}</option>)}
@@ -1564,7 +1582,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
   if (phase === "setup") {
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary }}>퀴즈 설정</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>퀴즈 설정</h2>
         <div style={S.card}>
           <div style={{ marginBottom: 14 }}>
             <label style={S.label}>퀴즈 모드</label>
@@ -1637,7 +1655,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
     const acc = sessionResults.length > 0 ? Math.round(correctCount / sessionResults.length * 100) : 0;
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary }}>퀴즈 결과</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>퀴즈 결과</h2>
         <div style={S.card}>
           <div style={{ fontSize: 40, fontWeight: 700, color: acc >= 70 ? C.success : acc >= 50 ? C.warning : C.danger, marginBottom: 6 }}>{acc}%</div>
           <div style={{ color: C.muted }}>{correctCount} / {sessionResults.length} 정답 · 리뷰 로그에 기록됨</div>
@@ -1680,7 +1698,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
             onClick={handleCardReveal}
           >
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{item.data.subject} · {item.data.chapter}</div>
-            <div style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.6 }}>{revealed ? item.data.back : item.data.front}</div>
+            <div style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.6, fontFamily: "'Playfair Display', Georgia, serif", letterSpacing: "-0.01em" }}>{revealed ? item.data.back : item.data.front}</div>
             <CardImage image_url={item.data.image_url} image_present={item.data.image_present} image_ref={item.data.image_ref} />
             {!revealed && <div style={{ marginTop: 14, fontSize: 12, color: C.muted }}>탭하여 답 확인</div>}
           </div>
@@ -1695,7 +1713,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
         <div>
           <div style={S.card}>
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{item.data.subject}</div>
-            <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.8, whiteSpace: "pre-wrap", marginBottom: 16 }}>
+            <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.8, whiteSpace: "pre-wrap", marginBottom: 16, fontFamily: "'Playfair Display', Georgia, serif", letterSpacing: "-0.01em" }}>
               {item.data.parsed_question || item.data.raw_question}
             </div>
             <CardImage image_url={item.data.image_url} image_present={item.data.image_present} image_ref={item.data.image_ref} />
@@ -1795,7 +1813,7 @@ function PlanPage({ data, updateData, showToast }) {
       <div>
         <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
           <button style={S.btn("default")} onClick={() => setView("list")}>← 뒤로</button>
-          <h2 style={{ margin: 0, color: C.primary }}>시험 추가</h2>
+          <h2 style={{ margin: 0, color: C.primary , ...T.heading }}>시험 추가</h2>
         </div>
         <div style={S.card}>
           {[
@@ -1872,7 +1890,7 @@ function PlanPage({ data, updateData, showToast }) {
       <div>
         <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
           <button style={S.btn("default")} onClick={() => setView("list")}>← 뒤로</button>
-          <h2 style={{ margin: 0, color: C.primary }}>{exam.name}</h2>
+          <h2 style={{ margin: 0, color: C.primary , ...T.heading }}>{exam.name}</h2>
         </div>
 
         <div style={{ ...S.card, borderLeft: `3px solid ${borderColor}` }}>
@@ -1938,7 +1956,7 @@ function PlanPage({ data, updateData, showToast }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.primary }}>시험 플랜</h2>
+        <h2 style={{ margin: 0, color: C.primary , ...T.heading }}>시험 플랜</h2>
         <button style={S.btn("success")} onClick={() => setView("create")}>+ 시험 추가</button>
       </div>
       {sorted.length === 0 ? (
@@ -2038,7 +2056,7 @@ function StatsPage({ data }) {
 
   return (
     <div>
-      <h2 style={{ margin: "0 0 16px", color: C.primary }}>학습 통계</h2>
+      <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>학습 통계</h2>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
         <div style={{ ...S.card, marginBottom: 0 }}>
@@ -2364,7 +2382,7 @@ function ManagePage({ data, updateData, showToast }) {
 
   return (
     <div>
-      <h2 style={{ margin: "0 0 16px", color: C.primary }}>관리</h2>
+      <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>관리</h2>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
         {tabs.map(([t, label]) => (
@@ -2920,7 +2938,7 @@ function ConceptPage({ data, updateData, showToast }) {
     return (
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2 style={{ margin: 0, color: C.primary }}>개념 허브</h2>
+          <h2 style={{ margin: 0, color: C.primary , ...T.heading }}>개념 허브</h2>
           <button style={S.btn("success")} onClick={openCreate}>+ 개념 추가</button>
         </div>
 
@@ -3127,7 +3145,7 @@ function ConceptPage({ data, updateData, showToast }) {
       <div>
         <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center" }}>
           <button style={S.btn("default")} onClick={() => { setView("list"); setForm(null); }}>← 취소</button>
-          <h2 style={{ margin: 0, color: C.primary }}>{view === "create" ? "개념 추가" : "개념 수정"}</h2>
+          <h2 style={{ margin: 0, color: C.primary , ...T.heading }}>{view === "create" ? "개념 추가" : "개념 수정"}</h2>
         </div>
 
         <div style={S.card}>
@@ -3310,7 +3328,7 @@ function DecisionTrainingPage({ data, logReview, showToast, refreshClusters }) {
     const cluster = clusters.find(c => c.id === clusterId);
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary }}>감별 훈련 완료</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>감별 훈련 완료</h2>
         <div style={S.card}>
           <div style={{ fontSize: 36, fontWeight: 700, color: acc >= 70 ? C.success : C.warning, marginBottom: 4 }}>{acc}%</div>
           <div style={{ color: C.muted }}>{correctCount}/{results.length} 정답 · {cluster ? cluster.label : ""}</div>
@@ -3345,7 +3363,7 @@ function DecisionTrainingPage({ data, logReview, showToast, refreshClusters }) {
     if (clusters.length === 0) {
       return (
         <div>
-          <h2 style={{ margin: "0 0 16px", color: C.primary }}>감별 훈련</h2>
+          <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>감별 훈련</h2>
           <div style={S.card}>
             <div style={{ color: C.muted, fontSize: 14 }}>감별 훈련 클러스터가 없습니다.</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>복습·플래시카드를 진행하면 오답 패턴에서 자동으로 클러스터가 생성됩니다.</div>
@@ -3355,7 +3373,7 @@ function DecisionTrainingPage({ data, logReview, showToast, refreshClusters }) {
     }
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary }}>감별 훈련</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>감별 훈련</h2>
         <div style={{ fontSize: 13, color: C.muted, marginBottom: 14 }}>
           오답이 반복된 개념 그룹에서 유사 선지를 구별하는 훈련입니다.
         </div>
