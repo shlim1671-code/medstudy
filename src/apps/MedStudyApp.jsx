@@ -18,6 +18,13 @@ const SK = {
   confusionClusters: "medstudy:confusion-clusters",
 };
 
+const SUBJECT_SUGGESTIONS = [
+  "해부학", "생리학", "생화학", "약리학", "병리학",
+  "미생물학", "면역학", "예방의학", "내과학", "외과학",
+  "산부인과학", "소아과학", "정신건강의학", "신경과학",
+  "영상의학", "마취과학", "기타",
+];
+
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
@@ -3155,9 +3162,19 @@ function ConceptPage({ data, updateData, showToast }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
             <div>
               <label style={S.label}>과목</label>
-              <select style={S.input} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}>
-                {["", "해부학","생리학","생화학","약리학","병리학","미생물학","기타"].map(s => <option key={s} value={s}>{s || "선택 안 함"}</option>)}
-              </select>
+              <>
+                <input
+                  style={S.input}
+                  list="subject-list-manage"
+                  value={form.subject}
+                  placeholder="예: 해부학 (직접 입력 가능)"
+                  onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
+                />
+                <datalist id="subject-list-manage">
+                  <option value="" />
+                  {SUBJECT_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+                </datalist>
+              </>
             </div>
             <div>
               <label style={S.label}>Tier</label>

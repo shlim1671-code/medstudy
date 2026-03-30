@@ -10,6 +10,13 @@ const SK = {
   exams: "medstudy:exams",
 };
 
+const SUBJECT_SUGGESTIONS = [
+  "해부학", "생리학", "생화학", "약리학", "병리학",
+  "미생물학", "면역학", "예방의학", "내과학", "외과학",
+  "산부인과학", "소아과학", "정신건강의학", "신경과학",
+  "영상의학", "마취과학", "기타",
+];
+
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
 // ─────────────────────────────────────────
@@ -462,7 +469,7 @@ function ImageLinkPanel({ showToast }) {
 // ─────────────────────────────────────────
 function CardInjector({ showToast, exams, professors }) {
   const blank = {
-    subject: "해부학", chapter: "", front: "", back: "",
+    subject: "", chapter: "", front: "", back: "",
     templateType: "anatomy", conceptId: "", tier: "active",
     source_type: "manual",
     tags: "", sourceId: "", examId: "", professorId: "",
@@ -473,6 +480,7 @@ function CardInjector({ showToast, exams, professors }) {
   const fields = TEMPLATE_FIELDS[form.templateType] || [];
 
   async function save() {
+    if (!form.subject.trim()) { showToast("과목명을 입력하세요.", "error"); return; }
     if (!form.front || !form.back) { showToast("앞면과 뒷면은 필수입니다.", "error"); return; }
     const cards = (await sGet(SK.cards)) || [];
     let concepts = (await sGet(SK.concepts)) || [];
@@ -542,9 +550,18 @@ function CardInjector({ showToast, exams, professors }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <div>
             <label style={S.label}>과목</label>
-            <select style={S.input} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}>
-              {["해부학","생리학","생화학","약리학","병리학","미생물학","기타"].map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <>
+              <input
+                style={S.input}
+                list="subject-list-card"
+                value={form.subject}
+                placeholder="예: 해부학, 내과학, 직접 입력 가능"
+                onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
+              />
+              <datalist id="subject-list-card">
+                {SUBJECT_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+              </datalist>
+            </>
           </div>
           <div>
             <label style={S.label}>템플릿</label>
@@ -661,7 +678,7 @@ function CardInjector({ showToast, exams, professors }) {
 // ─────────────────────────────────────────
 function QuestionInjector({ showToast, exams, professors }) {
   const blank = {
-    subject: "해부학", type: "mcq", rawQuestion: "", parsedQuestion: "",
+    subject: "", type: "mcq", rawQuestion: "", parsedQuestion: "",
     options: [{ text: "", correct: false }, { text: "", correct: false }, { text: "", correct: false }, { text: "", correct: false }, { text: "", correct: false }],
     explanation: "", status: "confirmed", examId: "", professorId: "",
     examYear: "", isOriginalExam: true, tags: "",
@@ -679,6 +696,7 @@ function QuestionInjector({ showToast, exams, professors }) {
   }
 
   async function save() {
+    if (!form.subject.trim()) { showToast("과목명을 입력하세요.", "error"); return; }
     if (!form.rawQuestion) { showToast("원본 문제는 필수입니다.", "error"); return; }
     if (form.type === "mcq") {
       const hasCorrect = form.options.some(o => o.correct);
@@ -824,9 +842,18 @@ function QuestionInjector({ showToast, exams, professors }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <div>
             <label style={S.label}>과목</label>
-            <select style={S.input} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}>
-              {["해부학","생리학","생화학","약리학","병리학","미생물학","기타"].map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <>
+              <input
+                style={S.input}
+                list="subject-list-question"
+                value={form.subject}
+                placeholder="예: 해부학, 내과학, 직접 입력 가능"
+                onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
+              />
+              <datalist id="subject-list-question">
+                {SUBJECT_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+              </datalist>
+            </>
           </div>
           <div>
             <label style={S.label}>문제 유형</label>
