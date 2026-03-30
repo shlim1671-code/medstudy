@@ -905,14 +905,14 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
   const hasDue      = dueCards.length > 0;
 
   return (
-    <div>
+    <div style={{ display: "grid", gap: 12 }}>
 
       {/* ── Last-Mile banner — only when active ── */}
       {lastMileMode && lmCfg[lastMileMode] && (
         <div style={{
           background: lmCfg[lastMileMode].color + "18",
           border: `1px solid ${lmCfg[lastMileMode].color}`,
-          borderRadius: 10, padding: "11px 16px", marginBottom: 12,
+          borderRadius: 10, padding: "11px 16px",
           display: "flex", justifyContent: "space-between", alignItems: "center",
         }}>
           <div>
@@ -934,7 +934,6 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
         borderLeft: `4px solid ${hasDue ? C.primary : C.success}`,
         borderRadius: 10,
         padding: "20px 20px 16px",
-        marginBottom: 12,
       }}>
         {/* Top row: label + exam countdown */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
@@ -1015,7 +1014,7 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
       </div>
 
       {/* ── Secondary quick actions — clear subordinate role ── */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button
           onClick={() => navigate("quiz")}
           style={{ ...S.btn("primary"), fontSize: 13, padding: "8px 16px" }}>
@@ -1038,7 +1037,6 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
         <div style={{
           ...S.card,
           borderLeft: `4px solid ${C.danger}`,
-          marginBottom: 12,
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ flex: 1 }}>
@@ -1092,7 +1090,7 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
 
       {/* ── Exam Focus ── */}
       {upcomingExams.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
+        <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
             다가오는 시험
           </div>
