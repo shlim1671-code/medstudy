@@ -625,7 +625,7 @@ function CardInjector({ showToast, exams, professors }) {
         </div>
 
         {/* Image fields */}
-        <div style={{ background: "#252d3d", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+        <div style={{ background: C.surface2, borderRadius: 8, padding: 12, marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: C.primary, fontWeight: 600, marginBottom: 8 }}>🖼️ 이미지 (선택)</div>
           <div style={{ marginBottom: 8 }}>
             <label style={S.label}>이미지 URL (Supabase public URL 붙여넣기)</label>
@@ -642,7 +642,7 @@ function CardInjector({ showToast, exams, professors }) {
 
         {/* Exam/Professor Connection */}
         {(exams.length > 0 || professors.length > 0) && (
-          <div style={{ background: "#252d3d", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+          <div style={{ background: C.surface2, borderRadius: 8, padding: 12, marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: C.warning, fontWeight: 600, marginBottom: 8 }}>📎 시험·교수 연결</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {exams.length > 0 && (
@@ -930,7 +930,7 @@ function QuestionInjector({ showToast, exams, professors }) {
         </div>
 
         {/* Image fields */}
-        <div style={{ background: "#252d3d", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+        <div style={{ background: C.surface2, borderRadius: 8, padding: 12, marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: C.primary, fontWeight: 600, marginBottom: 8 }}>🖼️ 이미지 (선택)</div>
           <div style={{ marginBottom: 8 }}>
             <label style={S.label}>이미지 URL (Supabase public URL 붙여넣기)</label>
@@ -946,7 +946,7 @@ function QuestionInjector({ showToast, exams, professors }) {
         </div>
 
         {(exams.length > 0 || professors.length > 0) && (
-          <div style={{ background: "#252d3d", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+          <div style={{ background: C.surface2, borderRadius: 8, padding: 12, marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: C.warning, fontWeight: 600, marginBottom: 8 }}>📎 시험·교수 연결</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {exams.length > 0 && (

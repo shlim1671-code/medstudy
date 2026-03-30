@@ -430,6 +430,8 @@ const C = {
   cardFace: "#f8f3ea",
   cardText: "#2c2318",
   cardBorder: "#d4c4a8",
+  paperText:  "#2c2318",
+  paperMuted: "#9a8870",
 };
 
 const FONT_HEADING = "'Playfair Display', Georgia, serif";
@@ -567,12 +569,12 @@ function CardImage({ image_url, image_present, image_ref }) {
       <div style={{
         margin: "10px 0",
         padding: "8px 12px",
-        background: "#1e2d42",
+        background: C.surface,
         borderRadius: 8,
         textAlign: "center",
-        color: "#92a4be",
+        color: C.muted,
         fontSize: 12,
-        border: "1px dashed #304060",
+        border: `1px dashed ${C.border}`,
       }}>
         [이미지 없음{image_ref ? ` — ${image_ref}` : ""}]
       </div>
@@ -588,7 +590,7 @@ function CardImage({ image_url, image_present, image_ref }) {
         maxWidth: "100%",
         maxHeight: 300,
         objectFit: "contain",
-        background: "#1e2d42",
+        background: C.surface,
         borderRadius: 8,
         margin: "10px 0",
         display: "block",
