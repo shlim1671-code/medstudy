@@ -417,151 +417,119 @@ function getDangerCardIds(reviewLog) {
 // Design Tokens — Phase 7B-2
 // ─────────────────────────────────────────
 const C = {
-  bg:         "#161210",
-  surface:    "#1e1c18",
-  surface2:   "#252219",
-  border:     "#2a2720",
-  text:       "#f0ebe0",
-  muted:      "#6b6256",
-  primary:    "#a07850",
-  success:    "#6aac5c",
-  danger:     "#d4745a",
-  warning:    "#c4963a",
-  paper:      "#f8f3ea",
-  paperText:  "#2c2520",
-  paperMuted: "#8a7f6e",
-  dangerBg:   "#3d1f1a",
-  successBg:  "#1a2e1c",
-  primaryBg:  "#2a2218",
+  bg:       "#161210",
+  surface:  "#1f1a16",
+  surface2: "#2a2218",
+  border:   "#3a2e24",
+  text:     "#e8e0d4",
+  muted:    "#8a7d70",
+  primary:  "#a07850",
+  success:  "#6a9e6a",
+  danger:   "#c46a5a",
+  warning:  "#c4a84a",
+  cardFace: "#f8f3ea",
+  cardText: "#2c2318",
+  cardBorder: "#d4c4a8",
 };
 
 const FONT_HEADING = "'Playfair Display', Georgia, serif";
-const FONT_BODY    = "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif";
+const FONT_BODY = "'Noto Sans KR', system-ui, sans-serif";
 
 const S = {
   card: {
-    background:   C.surface,
-    borderRadius: 14,
-    border:       `1px solid ${C.border}`,
-    padding:      "18px 20px",
-    marginBottom: 10,
-  },
-  flashcard: {
-    background:   C.paper,
-    borderRadius: 20,
-    border:       "none",
-    padding:      "32px 28px 24px",
-    marginBottom: 14,
+    background: C.surface,
+    borderRadius: 12,
+    border: `1px solid ${C.border}`,
+    padding: "16px 18px",
+    marginBottom: 12,
   },
   cardInset: {
-    background:   C.surface2,
-    borderRadius: 10,
-    border:       `1px solid ${C.border}`,
-    padding:      "10px 14px",
+    background: C.surface2,
+    borderRadius: 8,
+    border: `1px solid ${C.border}`,
+    padding: "10px 14px",
     marginBottom: 8,
   },
   btn: (v = "primary") => ({
-    padding:      "11px 20px",
-    borderRadius: 10,
-    border:       "none",
-    cursor:       "pointer",
-    fontWeight:   700,
-    fontSize:     13,
-    fontFamily:   FONT_BODY,
-    letterSpacing:"0.04em",
-    transition:   "filter 0.12s, transform 0.06s",
-    background:
-      v === "primary" ? C.primary :
-      v === "success" ? C.successBg :
-      v === "danger"  ? C.dangerBg :
-      C.surface2,
-    color:
-      v === "primary" ? "#1a1108" :
-      v === "success" ? C.success :
-      v === "danger"  ? C.danger  :
-      C.text,
-  }),
-  btnAction: (v = "forgot") => ({
-    flex:          1,
-    padding:       "16px 8px",
-    borderRadius:  14,
-    border:        "none",
-    cursor:        "pointer",
-    fontFamily:    FONT_BODY,
-    fontWeight:    700,
-    fontSize:      12,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    display:       "flex",
-    flexDirection: "column",
-    alignItems:    "center",
-    gap:           6,
-    background:    v === "forgot" ? C.dangerBg  : C.successBg,
-    color:         v === "forgot" ? C.danger     : C.success,
+    padding: "9px 18px", borderRadius: 8, border: "none", cursor: "pointer",
+    fontWeight: 600, fontSize: 13,
+    fontFamily: "'Noto Sans KR', system-ui, sans-serif",
+    background: v === "primary" ? C.primary
+              : v === "success"  ? C.success
+              : v === "danger"   ? C.danger
+              : C.surface2,
+    color: v === "primary" ? "#1a1008"
+         : v === "success"  ? "#0e1f0e"
+         : v === "danger"   ? "#1f0c0a"
+         : C.text,
   }),
   input: {
-    background:  C.surface2,
-    border:      `1px solid ${C.border}`,
-    borderRadius: 10,
-    padding:     "9px 14px",
-    color:       C.text,
-    fontSize:    14,
-    fontFamily:  FONT_BODY,
-    width:       "100%",
-    boxSizing:   "border-box",
-    outline:     "none",
+    background: C.surface2,
+    border: `1px solid ${C.border}`,
+    borderRadius: 8,
+    padding: "8px 12px",
+    color: C.text,
+    fontSize: 14,
+    fontFamily: "'Noto Sans KR', system-ui, sans-serif",
+    width: "100%",
+    boxSizing: "border-box",
   },
-  label: {
-    fontSize:      11,
-    color:         C.muted,
-    marginBottom:  4,
-    display:       "block",
-    fontWeight:    700,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    fontFamily:    FONT_BODY,
-  },
-  badge: (col = C.primary) => {
-    const bg =
-      col === C.danger  ? C.dangerBg  :
-      col === C.success ? C.successBg :
-      col === C.primary ? C.primaryBg :
-      col + "22";
-    return {
-      background:    bg,
-      color:         col,
-      padding:       "3px 9px",
-      borderRadius:  6,
-      fontSize:      10,
-      fontWeight:    700,
-      letterSpacing: "0.08em",
-      textTransform: "uppercase",
-      display:       "inline-block",
-      fontFamily:    FONT_BODY,
-    };
-  },
-  badgePaper: (col = "#b84a2e", bg = "#f5e0da") => ({
-    background:    bg,
-    color:         col,
-    padding:       "3px 9px",
-    borderRadius:  6,
-    fontSize:      10,
-    fontWeight:    700,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    display:       "inline-block",
-    fontFamily:    FONT_BODY,
+  label: { fontSize: 12, color: C.muted, marginBottom: 4, display: "block", fontWeight: 500 },
+  badge: (col = C.primary) => ({
+    background: col + "28",
+    color: col,
+    padding: "2px 8px",
+    borderRadius: 9999,
+    fontSize: 11,
+    fontWeight: 600,
+    display: "inline-block",
   }),
   sectionLabel: {
-    fontSize:      10,
-    fontWeight:    700,
-    color:         C.muted,
+    fontSize: 11,
+    fontWeight: 700,
+    color: C.muted,
     textTransform: "uppercase",
-    letterSpacing: "0.1em",
-    marginBottom:  8,
-    display:       "block",
-    fontFamily:    FONT_BODY,
+    letterSpacing: "0.07em",
+    marginBottom: 8,
+    display: "block",
   },
+  flashcard: {
+    background: C.cardFace,
+    borderRadius: 20,
+    border: `1px solid ${C.cardBorder}`,
+    padding: "32px 28px 24px",
+    marginBottom: 14,
+  },
+  btnAction: (v = "forgot") => ({
+    flex: 1,
+    padding: "16px 8px",
+    borderRadius: 14,
+    border: "none",
+    cursor: "pointer",
+    fontFamily: FONT_BODY,
+    fontWeight: 700,
+    fontSize: 12,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 6,
+    background: v === "forgot" ? C.danger + "22" : C.success + "22",
+    color: v === "forgot" ? C.danger : C.success,
+  }),
+  badgePaper: (col = "#b84a2e", bg = "#f5e0da") => ({
+    background: bg,
+    color: col,
+    padding: "3px 9px",
+    borderRadius: 6,
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    display: "inline-block",
+    fontFamily: FONT_BODY,
+  }),
 };
 
 // ─────────────────────────────────────────
@@ -624,10 +592,14 @@ export default function MedStudyApp() {
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Noto+Sans+KR:wght@400;500;700&display=swap";
-    document.head.appendChild(link);
+    // Inject Google Fonts: Playfair Display + Noto Sans KR
+    if (!document.getElementById("medstudy-fonts")) {
+      const link = document.createElement("link");
+      link.id = "medstudy-fonts";
+      link.rel = "stylesheet";
+      link.href = "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap";
+      document.head.appendChild(link);
+    }
   }, []);
 
   useEffect(() => { init(); }, []);
@@ -807,7 +779,7 @@ export default function MedStudyApp() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: FONT_BODY, fontSize: 14 }}>
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'Noto Sans KR', system-ui, sans-serif", fontSize: 14 }}>
       {/* Header */}
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ fontFamily: FONT_HEADING, fontWeight: 700, fontSize: 17, color: C.text, letterSpacing: "-0.01em" }}>
@@ -832,7 +804,7 @@ export default function MedStudyApp() {
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: "fixed", top: 60, right: 20, zIndex: 999, padding: "10px 16px", borderRadius: 10, background: toast.type === "error" ? C.dangerBg : C.successBg, color: toast.type === "error" ? C.danger : C.success, fontWeight: 700, fontSize: 13, border: `1px solid ${toast.type === "error" ? C.danger : C.success}`, fontFamily: FONT_BODY }}>
+        <div style={{ position: "fixed", top: 60, right: 20, zIndex: 999, padding: "10px 16px", borderRadius: 10, background: toast.type === "error" ? C.danger : C.success, color: "#1a1008", fontWeight: 700, fontSize: 13, border: `1px solid ${toast.type === "error" ? C.danger : C.success}`, fontFamily: FONT_BODY }}>
           {toast.msg}
         </div>
       )}
