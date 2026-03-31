@@ -621,6 +621,12 @@ export default function MedStudyApp() {
       document.head.appendChild(link);
     }
   }, []);
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap";
+    document.head.appendChild(link);
+  }, []);
 
   useEffect(() => { init(); }, []);
 
@@ -890,6 +896,18 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
     const st = (data.srs[c.id] && data.srs[c.id].state) || "new";
     if (stateCounts[st] !== undefined) stateCounts[st]++;
   });
+  const streak = (() => {
+    const days = new Set(
+      (data.reviewLog || []).map(l => new Date(l.timestamp).toDateString())
+    );
+    let count = 0;
+    let d = new Date();
+    while (days.has(d.toDateString())) {
+      count++;
+      d = new Date(d - 86400000);
+    }
+    return count;
+  })();
 
   const lmCfg = {
     D7: { label: "D-7 집중 모드", color: C.warning, desc: "마스터된 카드 제외 · 취약 항목 우선" },
@@ -906,6 +924,47 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
+      {/* 인사말 */}
+      <div style={{ marginBottom: 4 }}>
+        <div style={{
+          fontFamily: "'Gowun Batang', serif",
+          fontSize: 22,
+          color: "#c4b89a",
+          lineHeight: 1.3,
+          fontWeight: 400,
+        }}>
+          오늘도 화이팅
+        </div>
+        <div style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: C.muted,
+          letterSpacing: "0.07em",
+          textTransform: "uppercase",
+          marginTop: 3,
+        }}>
+          {new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" })}
+        </div>
+      </div>
+
+      {/* 3열 스탯 그리드 */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 4 }}>
+        {[
+          ["복습 대기", dueCards.length, C.warning],
+          ["연속 학습", streak + "일", C.primary],
+          ["마스터", stateCounts.mastered, C.success],
+        ].map(([label, val, col]) => (
+          <div key={label} style={{
+            background: C.surface,
+            border: `1px solid ${C.border}`,
+            borderRadius: 10,
+            padding: "12px 14px",
+          }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: col, lineHeight: 1 }}>{val}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{label}</div>
+          </div>
+        ))}
+      </div>
 
       {/* ── Last-Mile banner — only when active ── */}
       {lastMileMode && lmCfg[lastMileMode] && (
