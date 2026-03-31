@@ -142,7 +142,7 @@ export default async function handler(req, res) {
     const fileBuffer = await fs.readFile(file.filepath);
     const parsed = await pdf(fileBuffer);
 
-    const pdfDoc = await pdfjsLib.getDocument({ data: fileBuffer }).promise;
+  const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(fileBuffer) }).promise;
     const totalPages = pdfDoc.numPages;
 
     const supabase = createClient(supabaseUrl, serviceKey);
