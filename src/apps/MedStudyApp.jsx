@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import * as d3 from "d3";
 import { sGet, sSet } from "../lib/storage";
 
 // ─────────────────────────────────────────
@@ -3154,6 +3155,8 @@ function rebuildConceptLinks(concept, cards, questions) {
 // ─────────────────────────────────────────
 function ConceptPage({ data, updateData, showToast }) {
   const [view, setView] = useState("list");          // list | detail | create | edit
+  const svgRef = useRef(null);
+  const [mapSubject, setMapSubject] = useState("전체");
   const [selected, setSelected] = useState(null);    // concept id
   const [form, setForm] = useState(null);
   const [search, setSearch] = useState("");
@@ -3175,6 +3178,80 @@ function ConceptPage({ data, updateData, showToast }) {
       || (c.secondaryLabel || "").toLowerCase().includes(q)
       || (c.aliases || []).some(a => a.toLowerCase().includes(q));
   });
+
+  const mindmapSubjects = ["전체", ...new Set(concepts.map(c => c.subject).filter(Boolean))];
+  const mindmapFiltered = mapSubject === "전체" ? concepts : concepts.filter(c => c.subject === mapSubject);
+  const mindmapNodeIds = new Set(mindmapFiltered.map(c => c.id));
+  const mindmapLinks = [];
+  mindmapFiltered.forEach(c => {
+    (c.linkedConceptIds || []).forEach(tid => {
+      if (mindmapNodeIds.has(tid)) mindmapLinks.push({ source: c.id, target: tid });
+    });
+  });
+
+  const masteryColor = (c) => {
+    const srsEntries = (data.cards || [])
+      .filter(card => card.primary_concept_id === c.id)
+      .map(card => data.srs[card.id]?.state);
+    if (srsEntries.includes("mastered")) return C.success;
+    if (srsEntries.includes("reviewing")) return C.primary;
+    if (srsEntries.includes("learning")) return C.warning;
+    return C.border;
+  };
+
+  useEffect(() => {
+    if (view !== "mindmap") return;
+    if (!svgRef.current || mindmapFiltered.length === 0) return;
+    const el = svgRef.current;
+    d3.select(el).selectAll("*").remove();
+    const W = el.clientWidth || 360;
+    const H = 480;
+    const svg = d3.select(el).attr("width", W).attr("height", H);
+    const g = svg.append("g");
+
+    svg.call(d3.zoom().scaleExtent([0.3, 3]).on("zoom", e => g.attr("transform", e.transform)));
+
+    const nodes = mindmapFiltered.map(c => ({ ...c }));
+    const linkData = mindmapLinks.map(l => ({ ...l }));
+
+    const sim = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(linkData).id(d => d.id).distance(80))
+      .force("charge", d3.forceManyBody().strength(-120))
+      .force("center", d3.forceCenter(W / 2, H / 2))
+      .force("collision", d3.forceCollide(28));
+
+    const link = g.append("g").selectAll("line")
+      .data(linkData).join("line")
+      .attr("stroke", C.border).attr("stroke-opacity", 0.5).attr("stroke-width", 1);
+
+    const node = g.append("g").selectAll("g")
+      .data(nodes).join("g")
+      .call(d3.drag()
+        .on("start", (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("drag",  (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on("end",   (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+      )
+      .on("click", (e, d) => { setSelected(d.id); setView("detail"); });
+
+    node.append("circle")
+      .attr("r", d => 8 + Math.min((d.importance || 1) * 2, 16))
+      .attr("fill", d => masteryColor(d))
+      .attr("stroke", C.bg).attr("stroke-width", 2);
+
+    node.append("text")
+      .text(d => d.primaryLabel || d.id)
+      .attr("text-anchor", "middle").attr("dy", d => 12 + Math.min((d.importance || 1) * 2, 16))
+      .attr("font-size", 10).attr("fill", C.text)
+      .style("pointer-events", "none");
+
+    sim.on("tick", () => {
+      link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+      node.attr("transform", d => `translate(${d.x},${d.y})`);
+    });
+
+    return () => sim.stop();
+  }, [view, mindmapFiltered.length, mapSubject]);
 
   function openCreate() {
     setForm(makeBlankConcept());
@@ -3245,13 +3322,55 @@ function ConceptPage({ data, updateData, showToast }) {
     setForm(f => ({ ...f, linkedConceptIds: (f.linkedConceptIds || []).filter(x => x !== targetId) }));
   }
 
+  if (view === "mindmap") {
+    return (
+      <div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+          <button style={S.btn("default")} onClick={() => setView("list")}>← 목록</button>
+          <h2 style={{ margin: 0, color: C.primary, fontSize: 18, fontWeight: 700 }}>마인드맵</h2>
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          {mindmapSubjects.map(s => (
+            <button key={s}
+              onClick={() => setMapSubject(s)}
+              style={{ ...S.btn(mapSubject === s ? "primary" : "default"), fontSize: 11, padding: "4px 10px" }}>
+              {s}
+            </button>
+          ))}
+        </div>
+        {mindmapFiltered.length === 0 ? (
+          <div style={S.card}><div style={{ color: C.muted }}>개념을 추가하면 마인드맵이 생성됩니다.</div></div>
+        ) : (
+          <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+            <svg ref={svgRef} style={{ width: "100%", display: "block", background: C.bg, borderRadius: 10 }} />
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 12, marginTop: 10, padding: "0 4px" }}>
+          {[[C.success,"마스터"],[C.primary,"복습중"],[C.warning,"학습중"],[C.border,"신규"]].map(([col,label]) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: col }} />
+              <span style={{ fontSize: 10, color: C.muted }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   // ── List view ──
   if (view === "list") {
     return (
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <h2 style={{ margin: 0, color: C.primary , ...T.heading }}>개념 허브</h2>
-          <button style={S.btn("success")} onClick={openCreate}>+ 개념 추가</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              style={{ ...S.btn(view === "mindmap" ? "primary" : "default"), fontSize: 12 }}
+              onClick={() => setView("mindmap")}>
+              🗺 마인드맵
+            </button>
+            <button style={S.btn("success")} onClick={openCreate}>+ 개념 추가</button>
+          </div>
         </div>
 
         <input style={{ ...S.input, marginBottom: 12 }} placeholder="ID / 라벨 / 별칭 검색..." value={search} onChange={e => setSearch(e.target.value)} />
