@@ -2460,7 +2460,7 @@ function ManagePage({ data, updateData, showToast }) {
       }
 
       setPdfStatus({ phase: "문제 구조화 중...", progress: 55 });
-      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(pdfForm.geminiApiKey.trim())}`, {
+      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(pdfForm.geminiApiKey.trim())}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
