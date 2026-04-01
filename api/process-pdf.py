@@ -1,7 +1,9 @@
 import cgi
 import json
 import os
+import sys
 import time
+import traceback
 import uuid
 from io import BytesIO
 from urllib.parse import quote
@@ -155,6 +157,7 @@ class handler(BaseHTTPRequestHandler):
                 "imageCount": image_count,
             })
         except Exception as e:
+            print(traceback.format_exc(), file=sys.stderr)
             return json_response(self, 500, {"error": str(e)})
 
     def do_GET(self):
