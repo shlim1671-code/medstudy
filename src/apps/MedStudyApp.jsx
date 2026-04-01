@@ -106,10 +106,27 @@ function normalizeConfidence(raw) {
 }
 
 function safeJsonArrayFromText(text) {
-  const cleaned = (text || "").trim().replace(/^```json/i, "").replace(/^```/, "").replace(/```$/, "").trim();
-  const parsed = JSON.parse(cleaned);
-  if (!Array.isArray(parsed)) throw new Error("Gemini 응답이 JSON 배열이 아닙니다.");
-  return parsed;
+  try {
+    const cleaned = (text || "")
+      .trim()
+      .replace(/^```json[\r\n]*/i, "")
+      .replace(/^```[\r\n]*/, "")
+      .replace(/[\r\n]*```\s*$/, "")
+      .trim();
+    const parsed = JSON.parse(cleaned);
+    if (!Array.isArray(parsed)) throw new Error("JSON 배열이 아닙니다.");
+    return parsed;
+  } catch (e) {
+    // Partial recovery: try to salvage a truncated array
+    const match = (text || "").match(/(\[[\s\S]*\})/);
+    if (match) {
+      try {
+        const recovered = JSON.parse(match[1] + "]");
+        if (Array.isArray(recovered) && recovered.length > 0) return recovered;
+      } catch {}
+    }
+    throw new Error(`Gemini 응답 파싱 실패: ${e.message}`);
+  }
 }
 
 function inferSourceTypeFromTags(tags = []) {
@@ -2437,38 +2454,52 @@ function ManagePage({ data, updateData, showToast }) {
       const pdfRes = await fetch("/api/process-pdf", { method: "POST", body: formData });
       const pdfJson = await pdfRes.json();
       if (!pdfRes.ok) throw new Error(pdfJson.error || "PDF 처리 실패");
+      const imageMapping = pdfJson.imageMapping || {};
+      if (pdfJson.imageCount > 0 && Object.keys(imageMapping).length === 0) {
+        console.warn("[MedStudy] imageMapping이 서버 응답에 없습니다. 이미지 연결 불가.");
+      }
 
       setPdfStatus({ phase: "문제 구조화 중...", progress: 55 });
-      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(pdfForm.geminiApiKey.trim())}`, {
+      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-latest:generateContent?key=${encodeURIComponent(pdfForm.geminiApiKey.trim())}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          generationConfig: {
+            maxOutputTokens: 8192,
+            temperature: 0.1,
+          },
           contents: [{
             parts: [{ text: `${PDF_PARSE_PROMPT}\n\n=== RAW EXAM TEXT START ===\n${pdfJson.text}\n=== RAW EXAM TEXT END ===` }],
           }],
         }),
       });
       const geminiJson = await geminiRes.json();
+      if (!geminiRes.ok) {
+        const msg = geminiJson?.error?.message || `HTTP ${geminiRes.status}`;
+        throw new Error(`Gemini API 오류: ${msg}`);
+      }
       const rawText = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
       const parsedItems = safeJsonArrayFromText(rawText);
 
       setPdfStatus({ phase: "저장 중...", progress: 80 });
       const questions = data.questions || [];
       const cards = data.cards || [];
-      const existingQ = new Set(questions.map(q => (q.raw_question || "").trim()));
-      const existingC = new Set(cards.map(c => (c.front || "").trim()));
+      const normalize = s => (s || "").replace(/\s+/g, " ").trim();
+      const existingQ = new Set(questions.map(q => normalize(q.raw_question)));
+      const existingC = new Set(cards.map(c => normalize(c.front)));
       const newQuestions = [];
       const newCards = [];
       let unresolvedImageRefs = 0;
 
       parsedItems.forEach(item => {
         const rawQuestion = item.raw_question || "";
+        const normalizedRawQuestion = normalize(rawQuestion);
         const imageRef = item.image_ref || null;
-        const mappedImage = imageRef ? pdfJson.imageMapping?.[imageRef] : null;
+        const mappedImage = imageRef ? imageMapping[imageRef] : null;
         if (imageRef && !mappedImage?.url) unresolvedImageRefs += 1;
 
         if ((item.type || "").toLowerCase() === "objective") {
-          if (!rawQuestion.trim() || existingQ.has(rawQuestion.trim())) return;
+          if (!normalizedRawQuestion || existingQ.has(normalizedRawQuestion)) return;
           const canonicalAnswer = item.canonicalAnswer ?? null;
           newQuestions.push({
             id: uid(),
@@ -2493,12 +2524,12 @@ function ManagePage({ data, updateData, showToast }) {
             ingestion_batch_id: ingestionBatchId,
             createdAt: new Date().toISOString(),
           });
-          existingQ.add(rawQuestion.trim());
+          existingQ.add(normalizedRawQuestion);
           return;
         }
 
         if ((item.type || "").toLowerCase() === "subjective") {
-          const front = rawQuestion.trim();
+          const front = normalizedRawQuestion;
           if (!front || existingC.has(front)) return;
           newCards.push({
             id: uid(),
