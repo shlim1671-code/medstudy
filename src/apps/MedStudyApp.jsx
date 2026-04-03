@@ -75,27 +75,54 @@ const SUBJECT_SLUG_MAP = {
 };
 
 const PDF_PARSE_PROMPT = `
-You are a strict data extraction engine.
-Your ONLY goal is to convert raw exam text into structured JSON.
+You are an expert data extraction engine specialized in Korean medical school exam documents.
+Your task: read the ENTIRE document first, then extract ALL questions into a JSON array.
 
-ABSOLUTE PROHIBITIONS:
-- DO NOT explain anything
-- DO NOT solve questions
-- DO NOT generate reasoning or knowledge
-- DO NOT modify wording
+=== PHASE 1: UNDERSTAND THE DOCUMENT ===
+Before extracting, mentally map the document:
+- Identify the question numbering style used (e.g. "1번", "1.", "Q1", etc.)
+- Identify where answer choices appear (inline, in shared option boxes before/after questions, or not at all)
+- Identify where answers appear (inline, end-of-page key, last-page table, not present)
+- Identify non-question content to ignore (intro paragraphs, professor names, section headers, announcements)
 
-For each question extract:
-- raw_question: full original text exactly
-- options: array of {text, correct} — correct only if answer given
-- canonicalAnswer: exact answer text if given, else null
-- type: "objective" or "subjective"
-- image_present: true if [IMAGE pXXX_iYY] marker exists
-- image_ref: marker ID (e.g. "p003_i01"), else null
-- confidence: HIGH (explicit answer) / MEDIUM (implied) / NONE (no answer)
+=== PHASE 2: COLLECT SHARED RESOURCES ===
+Some documents place shared option boxes and answer keys separately from questions.
+- Shared option box: a labeled box like "[5-6번] 보기: 1.A 2.B 3.C" — note which question numbers it applies to
+- Answer key: may appear as a table, a numbered list, or inline markers (e.g. ③, ans:2, 정답:③)
+- Circled number mapping: ① → 1, ② → 2, ③ → 3, ④ → 4, ⑤ → 5
+Collect these before extraction so you can attach them to the right questions.
 
-SHARED STEM RULE: duplicate full shared stem into EACH question.
+=== PHASE 3: EXTRACT ALL QUESTIONS ===
+Extract every question you identified. For each question output:
 
-Return ONLY valid JSON array. No markdown, no explanation.
+{
+  "raw_question": "<full original stem + any inline options, exactly as written>",
+  "options": [
+    { "text": "<option text>", "correct": true/false }
+  ],
+  "canonicalAnswer": "<correct answer text, or null if unknown>",
+  "type": "objective" | "subjective",
+  "image_present": true | false,
+  "image_ref": "<e.g. p003_i01, or null>",
+  "confidence": "HIGH" | "MEDIUM" | "NONE"
+}
+
+RULES:
+- raw_question: include the question number and full stem. For shared-stem questions, duplicate the full shared stem into EACH sub-question.
+- options: use inline choices if present; use shared option box if applicable; use [] if truly no choices exist.
+- correct: mark true only if the answer key confirms it. Otherwise false for all options.
+- canonicalAnswer: full text of correct option (objective) or written answer (subjective). null if not in key.
+- type: "objective" if the answer is chosen from options. "subjective" if open-ended, fill-in-blank, or written answer.
+- image_present: true if there is an image, diagram, or [IMAGE ...] marker in or immediately adjacent to the question.
+- confidence: "HIGH" if answer confirmed by key. "MEDIUM" if answer strongly implied. "NONE" if absent from key.
+
+CRITICAL RULES:
+- Extract ALL questions. Never skip a question because the answer is missing.
+- Ignore ALL non-question text: intros, announcements, professor names, section titles, answer keys themselves.
+- Do not solve, explain, or add any content not present in the original document.
+- Handle any numbering or formatting style — there is no single fixed format.
+
+Return ONLY a valid JSON array. No markdown fences, no explanation, no preamble.
 `.trim();
 
 function normalizeConfidence(raw) {
