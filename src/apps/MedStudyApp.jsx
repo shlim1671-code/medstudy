@@ -2492,7 +2492,7 @@ function ManagePage({ data, updateData, showToast }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           generationConfig: {
-            maxOutputTokens: 8192,
+            maxOutputTokens: 65536,
             temperature: 0.1,
           },
           contents: [{
