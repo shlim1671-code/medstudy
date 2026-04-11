@@ -666,6 +666,253 @@ function ReviewPage({ colors }) {
   );
 }
 
+function QuizPage({ colors }) {
+  const [selectedOption, setSelectedOption] = useState(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const [showResult, setShowResult] = useState(false);
+
+  const currentQuestion = 2;
+  const totalQuestions = 10;
+  const progressPercent = (currentQuestion / totalQuestions) * 100;
+
+  const options = [
+    { id: "A", label: "프로프라놀롤", isCorrect: false },
+    { id: "B", label: "아테놀롤", isCorrect: true },
+    { id: "C", label: "카르베딜롤", isCorrect: false },
+    { id: "D", label: "라베탈롤", isCorrect: false },
+  ];
+
+  const handleConfirm = () => {
+    if (!selectedOption) return;
+    setConfirmed(true);
+    setShowResult(true);
+  };
+
+  const handleNext = () => {
+    setSelectedOption(null);
+    setConfirmed(false);
+    setShowResult(false);
+  };
+
+  const isCorrect =
+    showResult &&
+    options.find((opt) => opt.id === selectedOption)?.isCorrect;
+
+  return (
+    <div>
+      {/* Progress Header */}
+      <div style={{ marginBottom: 24 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 12,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: colors.accent,
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            퀴즈
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              color: colors.muted,
+              fontWeight: 500,
+            }}
+          >
+            문제 {currentQuestion} / {totalQuestions}
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div
+          style={{
+            width: "100%",
+            height: 2,
+            background: colors.surface2,
+            borderRadius: 1,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              width: `${progressPercent}%`,
+              height: "100%",
+              background: colors.accent,
+              borderRadius: 1,
+              transition: "width 0.3s ease",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Question Card */}
+      <div
+        style={{
+          background: colors.surface,
+          borderRadius: 16,
+          border: `1px solid ${colors.border}`,
+          padding: "24px 20px",
+          marginBottom: 24,
+          position: "relative",
+        }}
+      >
+        {/* Subject Badge */}
+        <div
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            padding: "6px 12px",
+            background: colors.accentDim,
+            color: colors.accentText,
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          약리학
+        </div>
+
+        {/* Question Text */}
+        <div
+          style={{
+            fontSize: 16,
+            fontWeight: 500,
+            color: colors.text,
+            lineHeight: 1.6,
+            paddingRight: 80,
+          }}
+        >
+          다음 중 β1 수용체를 선택적으로 차단하는 약물은?
+        </div>
+      </div>
+
+      {/* Answer Options */}
+      <div style={{ marginBottom: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+        {options.map((option) => {
+          let bgColor = colors.surface;
+          let borderColor = colors.border;
+          let textColor = colors.text;
+
+          if (selectedOption === option.id && !showResult) {
+            bgColor = colors.accentDim;
+            borderColor = colors.accent;
+            textColor = colors.accentText;
+          }
+
+          if (showResult && selectedOption === option.id) {
+            if (option.isCorrect) {
+              bgColor = colors.successDim;
+              borderColor = colors.success;
+              textColor = colors.success;
+            } else {
+              bgColor = colors.dangerDim;
+              borderColor = colors.danger;
+              textColor = colors.danger;
+            }
+          }
+
+          if (showResult && option.isCorrect && selectedOption !== option.id) {
+            bgColor = colors.successDim;
+            borderColor = colors.success;
+            textColor = colors.success;
+          }
+
+          return (
+            <button
+              key={option.id}
+              onClick={() => !confirmed && setSelectedOption(option.id)}
+              style={{
+                padding: "16px 20px",
+                background: bgColor,
+                border: `2px solid ${borderColor}`,
+                borderRadius: 12,
+                fontSize: 15,
+                fontWeight: 500,
+                color: textColor,
+                cursor: confirmed ? "default" : "pointer",
+                transition: "all 0.2s ease",
+                textAlign: "left",
+                display: "flex",
+                alignItems: "center",
+              }}
+              disabled={confirmed}
+              onMouseEnter={(e) => {
+                if (!confirmed && selectedOption !== option.id) {
+                  e.target.style.opacity = 0.7;
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.opacity = 1;
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  background: selectedOption === option.id ? textColor : colors.surface2,
+                  color: selectedOption === option.id ? colors.surface : textColor,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 600,
+                  marginRight: 12,
+                  fontSize: 13,
+                }}
+              >
+                {option.id}
+              </span>
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Confirm Button */}
+      <button
+        onClick={!showResult ? handleConfirm : handleNext}
+        disabled={!selectedOption && !showResult}
+        style={{
+          width: "100%",
+          padding: "16px 20px",
+          background:
+            !selectedOption && !showResult ? colors.surface2 : colors.accent,
+          color:
+            !selectedOption && !showResult ? colors.muted : "#FFFFFF",
+          border: "none",
+          borderRadius: 12,
+          fontSize: 16,
+          fontWeight: 600,
+          cursor:
+            !selectedOption && !showResult ? "not-allowed" : "pointer",
+          transition: "opacity 0.2s",
+        }}
+        onMouseEnter={(e) => {
+          if (selectedOption || showResult) {
+            e.target.style.opacity = 0.9;
+          }
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.opacity = 1;
+        }}
+      >
+        {showResult ? "다음 문제 →" : "확인"}
+      </button>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────
 // Tab Content Components
 // ─────────────────────────────────────────
@@ -707,6 +954,21 @@ function TabContent({ tabId }) {
         }}
       >
         <ReviewPage colors={colors} />
+      </div>
+    );
+  }
+
+  // Quiz tab
+  if (tabId === "quiz") {
+    return (
+      <div
+        style={{
+          padding: "20px 16px",
+          maxWidth: 480,
+          margin: "0 auto",
+        }}
+      >
+        <QuizPage colors={colors} />
       </div>
     );
   }
