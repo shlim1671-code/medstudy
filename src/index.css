@@ -1,0 +1,80 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css");
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html[data-theme="light"] {
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --surface2: #f2f2f7;
+  --border: #e5e5ea;
+  --text: #1c1c1e;
+  --muted: #8e8e93;
+  --accent: #0ea5e9;
+  --accent-dim: #e0f2fe;
+  --accent-text: #0284c7;
+  --success: #16a34a;
+  --success-dim: #dcfce7;
+  --danger: #dc2626;
+  --danger-dim: #fee2e2;
+}
+
+html[data-theme="dark"] {
+  --bg: #111111;
+  --surface: #1a1a1a;
+  --surface2: #222222;
+  --border: #2a2a2a;
+  --text: #e8e8ec;
+  --muted: #6b7280;
+  --accent: #0ea5e9;
+  --accent-dim: rgba(14, 165, 233, 0.15);
+  --accent-text: #38bdf8;
+  --success: #4ade80;
+  --success-dim: rgba(74, 222, 128, 0.12);
+  --danger: #f87171;
+  --danger-dim: rgba(248, 113, 113, 0.12);
+}
+
+body {
+  font-family: "Pretendard", system-ui, -apple-system, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  padding: 1rem;
+}
+
+html[data-theme="dark"] .card {
+  box-shadow: none;
+}
+
+/* Buttons */
+.btn {
+  border-radius: 0.75rem;
+  font-weight: 700;
+  padding: 0.5rem 1rem;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+/* Mobile-first */
+@media (max-width: 480px) {
+  body {
+    font-size: 14px;
+  }
+}
