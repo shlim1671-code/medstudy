@@ -437,6 +437,235 @@ function HomePage({ colors }) {
   );
 }
 
+function ReviewPage({ colors }) {
+  const [showAnswer, setShowAnswer] = useState(false);
+
+  const currentCard = 3;
+  const totalCards = 24;
+  const remainingCards = 21;
+  const progressPercent = (currentCard / totalCards) * 100;
+
+  return (
+    <div>
+      {/* Progress Header */}
+      <div style={{ marginBottom: 24 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 12,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: colors.accent,
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            복습 중
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              color: colors.muted,
+              fontWeight: 500,
+            }}
+          >
+            {currentCard} / {totalCards}
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div
+          style={{
+            width: "100%",
+            height: 2,
+            background: colors.surface2,
+            borderRadius: 1,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              width: `${progressPercent}%`,
+              height: "100%",
+              background: colors.accent,
+              borderRadius: 1,
+              transition: "width 0.3s ease",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Flashcard */}
+      <div
+        style={{
+          background: colors.surface,
+          borderRadius: 20,
+          border: `1px solid ${colors.border}`,
+          padding: "32px 24px",
+          marginBottom: 24,
+          minHeight: 400,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          position: "relative",
+        }}
+      >
+        {/* Subject Badge */}
+        <div
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            padding: "6px 12px",
+            background: colors.accentDim,
+            color: colors.accentText,
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          해부학
+        </div>
+
+        {/* Card Content */}
+        {!showAnswer ? (
+          <div
+            style={{
+              textAlign: "center",
+              width: "100%",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 500,
+                color: colors.text,
+                lineHeight: 1.6,
+                marginBottom: 32,
+              }}
+            >
+              요골신경(radial nerve) 손상 시 나타나는 자세는?
+            </div>
+
+            {/* Show Answer Button */}
+            <button
+              onClick={() => setShowAnswer(true)}
+              style={{
+                padding: "12px 24px",
+                background: colors.accent,
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: 10,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "opacity 0.2s",
+              }}
+              onMouseEnter={(e) => (e.target.style.opacity = 0.9)}
+              onMouseLeave={(e) => (e.target.style.opacity = 1)}
+            >
+              답 보기
+            </button>
+          </div>
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+              gap: 24,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 500,
+                color: colors.text,
+                lineHeight: 1.6,
+                textAlign: "center",
+              }}
+            >
+              수하수(wrist drop) — 손목 신전 불가
+            </div>
+
+            {/* Action Buttons */}
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+              }}
+            >
+              <button
+                style={{
+                  flex: 1,
+                  padding: "14px 16px",
+                  minHeight: 56,
+                  background: colors.dangerDim,
+                  color: colors.danger,
+                  border: "none",
+                  borderRadius: 12,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "opacity 0.2s",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                onMouseEnter={(e) => (e.target.style.opacity = 0.8)}
+                onMouseLeave={(e) => (e.target.style.opacity = 1)}
+              >
+                ✕ 모르겠음
+              </button>
+              <button
+                style={{
+                  flex: 1,
+                  padding: "14px 16px",
+                  minHeight: 56,
+                  background: colors.successDim,
+                  color: colors.success,
+                  border: "none",
+                  borderRadius: 12,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "opacity 0.2s",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                onMouseEnter={(e) => (e.target.style.opacity = 0.8)}
+                onMouseLeave={(e) => (e.target.style.opacity = 1)}
+              >
+                ✓ 알았음
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Remaining Cards Info */}
+      <div
+        style={{
+          textAlign: "center",
+          fontSize: 13,
+          color: colors.muted,
+          fontWeight: 500,
+        }}
+      >
+        남은 카드 {remainingCards}개
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────
 // Tab Content Components
 // ─────────────────────────────────────────
@@ -463,6 +692,21 @@ function TabContent({ tabId }) {
         }}
       >
         <HomePage colors={colors} />
+      </div>
+    );
+  }
+
+  // Review tab
+  if (tabId === "review") {
+    return (
+      <div
+        style={{
+          padding: "20px 16px",
+          maxWidth: 480,
+          margin: "0 auto",
+        }}
+      >
+        <ReviewPage colors={colors} />
       </div>
     );
   }
