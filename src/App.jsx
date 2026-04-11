@@ -3,12 +3,12 @@ import MedStudyApp from "./apps/MedStudyApp";
 import CardInjectorApp from "./apps/CardInjectorApp";
 
 const shell = {
-  bg: "#161210",
-  panel: "#161210",
-  border: "#3a2e24",
-  text: "#e8e0d4",
-  muted: "#8a7d70",
-  primary: "#a07850",
+  bg: "#0f1724",
+  panel: "#1e2d42",
+  border: "#304060",
+  text: "#e4edf8",
+  muted: "#92a4be",
+  primary: "#6aafe6",
 };
 
 export default function App() {
@@ -16,17 +16,17 @@ export default function App() {
 
   return (
     <div style={{ minHeight: "100vh", background: shell.bg, color: shell.text }}>
-      <header style={{ padding: "8px 16px", borderBottom: `1px solid ${shell.border}`, background: shell.panel, fontFamily: "'Noto Sans KR', system-ui, sans-serif" }}>
-        <strong style={{ marginRight: 12, fontSize: 13, color: shell.muted, fontWeight: 400 }}>MedStudy Web</strong>
+      <header style={{ padding: "12px 16px", borderBottom: `1px solid ${shell.border}`, background: shell.panel }}>
+        <strong style={{ marginRight: 12 }}>MedStudy Web</strong>
         <button
           onClick={() => setView("study")}
-          style={{ marginRight: 8, padding: "6px 10px", borderRadius: 0, border: "none", cursor: "pointer", background: "transparent", color: view === "study" ? shell.primary : shell.muted, borderBottom: `2px solid ${view === "study" ? shell.primary : "transparent"}`, fontSize: 13, fontWeight: view === "study" ? 600 : 400, fontFamily: "'Noto Sans KR', system-ui, sans-serif" }}
+          style={{ marginRight: 8, padding: "6px 10px", borderRadius: 6, border: "none", cursor: "pointer", background: view === "study" ? shell.primary : "#263350" }}
         >
           학습 앱
         </button>
         <button
           onClick={() => setView("injector")}
-          style={{ padding: "6px 10px", borderRadius: 0, border: "none", cursor: "pointer", background: "transparent", color: view === "injector" ? shell.primary : shell.muted, borderBottom: `2px solid ${view === "injector" ? shell.primary : "transparent"}`, fontSize: 13, fontWeight: view === "injector" ? 600 : 400, fontFamily: "'Noto Sans KR', system-ui, sans-serif" }}
+          style={{ padding: "6px 10px", borderRadius: 6, border: "none", cursor: "pointer", background: view === "injector" ? shell.primary : "#263350" }}
         >
           주입기
         </button>

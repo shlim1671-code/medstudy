@@ -16,7 +16,3 @@ for all
 to anon, authenticated
 using (true)
 with check (true);
-
--- Storage 버킷 수동 생성 필요:
--- Supabase 대시보드 > Storage > New bucket
--- Name: medstudy-images, Public: ON
