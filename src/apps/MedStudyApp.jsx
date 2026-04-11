@@ -174,13 +174,276 @@ function TabNavigation({ activeTab, onTabChange }) {
 }
 
 // ─────────────────────────────────────────
+// Home Page Components
+// ─────────────────────────────────────────
+function StatCard({ label, value, colors }) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        textAlign: "center",
+        padding: "16px 12px",
+        background: colors.surface,
+        borderRadius: 12,
+        border: `1px solid ${colors.border}`,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 24,
+          fontWeight: 700,
+          color: colors.accent,
+          marginBottom: 8,
+        }}
+      >
+        {value}
+      </div>
+      <div style={{ fontSize: 12, color: colors.muted, fontWeight: 500 }}>
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function ReviewCard({ colors }) {
+  const progress = 62;
+  return (
+    <div
+      style={{
+        background: colors.surface,
+        borderRadius: 16,
+        border: `1px solid ${colors.border}`,
+        padding: "20px 16px",
+        marginBottom: 16,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 12,
+          color: colors.accent,
+          fontWeight: 600,
+          marginBottom: 12,
+          textTransform: "uppercase",
+          letterSpacing: "0.5px",
+        }}
+      >
+        오늘 복습
+      </div>
+      <div
+        style={{
+          fontSize: 18,
+          fontWeight: 700,
+          color: colors.text,
+          marginBottom: 4,
+        }}
+      >
+        해부학 · 상지
+      </div>
+      <div
+        style={{
+          fontSize: 14,
+          color: colors.muted,
+          marginBottom: 16,
+        }}
+      >
+        24카드 중 15개 완료
+      </div>
+
+      {/* Progress Bar */}
+      <div
+        style={{
+          width: "100%",
+          height: 8,
+          background: colors.surface2,
+          borderRadius: 4,
+          marginBottom: 16,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${progress}%`,
+            height: "100%",
+            background: colors.accent,
+            borderRadius: 4,
+            transition: "width 0.3s ease",
+          }}
+        />
+      </div>
+
+      {/* Badges */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 16,
+        }}
+      >
+        <div
+          style={{
+            display: "inline-block",
+            padding: "6px 12px",
+            background: colors.accentDim,
+            color: colors.accentText,
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          24 카드
+        </div>
+        <div
+          style={{
+            display: "inline-block",
+            padding: "6px 12px",
+            background: colors.dangerDim,
+            color: colors.danger,
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          D-8 본시험
+        </div>
+      </div>
+
+      {/* Button */}
+      <button
+        style={{
+          width: "100%",
+          padding: "14px 16px",
+          background: colors.accent,
+          color: "#FFFFFF",
+          border: "none",
+          borderRadius: 12,
+          fontSize: 16,
+          fontWeight: 600,
+          cursor: "pointer",
+          transition: "opacity 0.2s",
+        }}
+        onMouseEnter={(e) => (e.target.style.opacity = 0.9)}
+        onMouseLeave={(e) => (e.target.style.opacity = 1)}
+      >
+        복습 시작 →
+      </button>
+    </div>
+  );
+}
+
+function FlashcardCard({ colors }) {
+  return (
+    <div
+      style={{
+        background: colors.surface,
+        borderRadius: 16,
+        border: `1px solid ${colors.border}`,
+        padding: "20px 16px",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 12,
+          color: colors.accent,
+          fontWeight: 600,
+          marginBottom: 16,
+          textTransform: "uppercase",
+          letterSpacing: "0.5px",
+        }}
+      >
+        플래시카드
+      </div>
+      <div
+        style={{
+          fontSize: 16,
+          fontWeight: 500,
+          color: colors.text,
+          lineHeight: 1.5,
+          marginBottom: 20,
+        }}
+      >
+        요골신경이 손상될 때 나타나는 특징적인 자세는?
+      </div>
+
+      {/* Action Buttons */}
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+        }}
+      >
+        <button
+          style={{
+            flex: 1,
+            padding: "12px 16px",
+            background: colors.dangerDim,
+            color: colors.danger,
+            border: "none",
+            borderRadius: 10,
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: "pointer",
+            transition: "opacity 0.2s",
+          }}
+          onMouseEnter={(e) => (e.target.style.opacity = 0.8)}
+          onMouseLeave={(e) => (e.target.style.opacity = 1)}
+        >
+          ✕ 모르겠음
+        </button>
+        <button
+          style={{
+            flex: 1,
+            padding: "12px 16px",
+            background: colors.successDim,
+            color: colors.success,
+            border: "none",
+            borderRadius: 10,
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: "pointer",
+            transition: "opacity 0.2s",
+          }}
+          onMouseEnter={(e) => (e.target.style.opacity = 0.8)}
+          onMouseLeave={(e) => (e.target.style.opacity = 1)}
+        >
+          ✓ 알았음
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function HomePage({ colors }) {
+  return (
+    <div>
+      {/* Stats Row */}
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          marginBottom: 24,
+        }}
+      >
+        <StatCard label="오늘 복습" value="24" colors={colors} />
+        <StatCard label="정답률" value="87%" colors={colors} />
+        <StatCard label="연속 일수" value="12" colors={colors} />
+      </div>
+
+      {/* Review Card */}
+      <ReviewCard colors={colors} />
+
+      {/* Flashcard Card */}
+      <FlashcardCard colors={colors} />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
 // Tab Content Components
 // ─────────────────────────────────────────
 function TabContent({ tabId }) {
   const { colors } = useTheme();
 
   const tabNames = {
-    home: "홈",
     review: "복습",
     quiz: "퀴즈",
     plan: "플랜",
@@ -189,6 +452,22 @@ function TabContent({ tabId }) {
     manage: "관리",
   };
 
+  // Home tab
+  if (tabId === "home") {
+    return (
+      <div
+        style={{
+          padding: "20px 16px",
+          maxWidth: 480,
+          margin: "0 auto",
+        }}
+      >
+        <HomePage colors={colors} />
+      </div>
+    );
+  }
+
+  // Other tabs placeholder
   return (
     <div
       style={{
