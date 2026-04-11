@@ -525,7 +525,7 @@ const S = {
   btn: (v = "primary") => ({
     padding: "9px 18px", borderRadius: 8, border: "none", cursor: "pointer",
     fontWeight: 600, fontSize: 13,
-    fontFamily: "'Noto Sans KR', system-ui, sans-serif",
+    fontFamily: FONT_BODY,
     background: v === "primary" ? C.primary
               : v === "success"  ? C.success
               : v === "danger"   ? C.danger
@@ -542,7 +542,7 @@ const S = {
     padding: "8px 12px",
     color: C.text,
     fontSize: 14,
-    fontFamily: "'Noto Sans KR', system-ui, sans-serif",
+    fontFamily: FONT_BODY,
     width: "100%",
     boxSizing: "border-box",
   },
