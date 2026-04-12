@@ -5,7 +5,8 @@ import os
 from http.server import BaseHTTPRequestHandler
 import cgi
 import io
-import requests
+import urllib.request
+import urllib.error
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -23,9 +24,10 @@ def upload_to_supabase(file_bytes, path):
         "x-upsert": "true",
     }
     try:
-        resp = requests.post(url, headers=headers, data=file_bytes)
-        if resp.status_code in (200, 201):
-            return f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET}/{path}"
+        req = urllib.request.Request(url, data=file_bytes, headers=headers, method="POST")
+        with urllib.request.urlopen(req) as resp:
+            if resp.status in (200, 201):
+                return f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET}/{path}"
     except Exception:
         pass
     return None
