@@ -1010,29 +1010,49 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode,
   const confirmedQ  = (data.questions || []).filter(q => q.status === "confirmed").length;
   const hasDue      = dueCards.length > 0;
 
+  const subjectProgress = (() => {
+    const subjects = {};
+    (data.cards || []).filter(c => c.status !== "archived" && c.subject).forEach(c => {
+      if (!subjects[c.subject]) subjects[c.subject] = { total: 0, mastered: 0 };
+      subjects[c.subject].total++;
+      if (data.srs[c.id] && data.srs[c.id].state === "mastered") {
+        subjects[c.subject].mastered++;
+      }
+    });
+    return Object.entries(subjects)
+      .map(([name, s]) => ({ name, total: s.total, mastered: s.mastered, pct: Math.round(s.mastered / s.total * 100) }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+  })();
+
+  const dangerCards = (data.cards || [])
+    .filter(c => c.status !== "archived" && dangerIds.has(c.id))
+    .slice(0, 3);
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      {/* 인사말 */}
-      <div style={{ marginBottom: 4 }}>
+      {/* ── Last-Mile banner — only when active ── */}
+      {lastMileMode && lmCfg[lastMileMode] && (
         <div style={{
-          fontFamily: FONT_HEADING,
-          fontSize: 22,
-          color: C.muted,
-          lineHeight: 1.3,
-          fontWeight: 400,
+          background: dimColor(lmCfg[lastMileMode].color, "18"),
+          border: `1px solid ${lmCfg[lastMileMode].color}`,
+          borderRadius: 10, padding: "11px 16px",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
         }}>
-          오늘도 화이팅
+          <div>
+            <div style={{ fontWeight: 700, color: lmCfg[lastMileMode].color, fontSize: 14 }}>
+              {lmCfg[lastMileMode].label}
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{lmCfg[lastMileMode].desc}</div>
+          </div>
+          <button style={{ ...S.btn("success"), fontSize: 12 }} onClick={() => navigate("review")}>
+            복습 시작 ({dueCards.length})
+          </button>
         </div>
-        <div style={{
-          fontSize: 11,
-          fontWeight: 700,
-          color: C.muted,
-          letterSpacing: "0.07em",
-          textTransform: "uppercase",
-          marginTop: 3,
-        }}>
-          {new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" })}
-        </div>
+      )}
+
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
+        {new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" })}
       </div>
 
       {/* 3열 스탯 그리드 */}
@@ -1053,26 +1073,6 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode,
           </div>
         ))}
       </div>
-
-      {/* ── Last-Mile banner — only when active ── */}
-      {lastMileMode && lmCfg[lastMileMode] && (
-        <div style={{
-          background: dimColor(lmCfg[lastMileMode].color, "18"),
-          border: `1px solid ${lmCfg[lastMileMode].color}`,
-          borderRadius: 10, padding: "11px 16px",
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-        }}>
-          <div>
-            <div style={{ fontWeight: 700, color: lmCfg[lastMileMode].color, fontSize: 14 }}>
-              {lmCfg[lastMileMode].label}
-            </div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{lmCfg[lastMileMode].desc}</div>
-          </div>
-          <button style={{ ...S.btn("success"), fontSize: 12 }} onClick={() => navigate("review")}>
-            복습 시작 ({dueCards.length})
-          </button>
-        </div>
-      )}
 
       {/* ── HERO: Today's review block ── */}
       <div style={{
@@ -1179,6 +1179,69 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode,
         </button>
       </div>
 
+      {upcomingExams.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
+            다가오는 시험
+          </div>
+          {upcomingExams.slice(0, 3).map(exam => {
+            const days = daysUntil(exam.date);
+            const urgent = days <= 7;
+            return (
+              <div key={exam.id} style={{
+                ...S.card,
+                borderLeft: `3px solid ${urgent ? C.danger : C.warning}`,
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "12px 14px",
+              }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{exam.name}</div>
+                  {exam.directScope && exam.directScope.includedTopics && exam.directScope.includedTopics.length > 0 && (
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                      범위: {exam.directScope.includedTopics.slice(0, 4).join(" · ")}
+                    </div>
+                  )}
+                </div>
+                <div style={{
+                  fontSize: 20, fontWeight: 700,
+                  color: urgent ? C.danger : C.warning,
+                }}>
+                  D-{days}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {subjectProgress.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
+            학습 진행률
+          </div>
+          {subjectProgress.map(sp => (
+            <div key={sp.name} style={{ ...S.card, padding: "10px 14px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 500 }}>{sp.name}</span>
+                <span style={{
+                  fontSize: 12, fontWeight: 600,
+                  color: sp.pct >= 70 ? C.success : sp.pct >= 30 ? C.primary : C.muted,
+                }}>
+                  {sp.pct}%
+                </span>
+              </div>
+              <div style={{ height: 4, background: C.border, borderRadius: 9999, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%", borderRadius: 9999,
+                  background: sp.pct >= 70 ? C.success : sp.pct >= 30 ? C.primary : C.muted,
+                  width: sp.pct + "%", transition: "width 0.3s",
+                }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── Danger / Weakness ── */}
       {(dangerIds.size > 0 || clusters.length > 0) && (
         <div style={{
@@ -1190,7 +1253,7 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode,
               <div style={{ fontSize: 11, fontWeight: 700, color: C.danger, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>
                 취약 항목
               </div>
-              <div style={{ display: "flex", gap: 18, marginBottom: clusters.length > 0 ? 10 : 0 }}>
+              <div style={{ display: "flex", gap: 18, marginBottom: clusters.length > 0 || dangerCards.length > 0 ? 10 : 0 }}>
                 {dangerIds.size > 0 && (
                   <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
                     <span style={{ fontSize: 26, fontWeight: 700, color: C.danger }}>{dangerIds.size}</span>
@@ -1204,8 +1267,20 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode,
                   </div>
                 )}
               </div>
+              {dangerCards.map(card => (
+                <div key={card.id} style={{
+                  padding: "6px 0",
+                  borderBottom: `1px solid ${C.border}`,
+                  fontSize: 12,
+                }}>
+                  <div style={{ color: C.muted, fontSize: 10, marginBottom: 2 }}>
+                    {card.subject}{card.chapter ? " · " + card.chapter : ""}
+                  </div>
+                  <div style={{ color: C.text }}>{(card.front || "").slice(0, 80)}</div>
+                </div>
+              ))}
               {clusters.length > 0 && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: dangerCards.length > 0 ? 8 : 0 }}>
                   {clusters.slice(0, 3).map(cl => (
                     <span key={cl.id} style={S.badge(cl.confusion_score >= 0.7 ? C.danger : C.warning)}>
                       {cl.label}
@@ -1232,65 +1307,6 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode,
               )}
             </div>
           </div>
-          {dangerIds.size > 0 && (() => {
-            const dangerCards = (data.cards || [])
-              .filter(c => dangerIds.has(c.id))
-              .slice(0, 3);
-            return (
-              <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
-                {dangerCards.map(c => (
-                  <div key={c.id} style={{
-                    padding: "6px 0",
-                    borderBottom: `1px solid ${C.border}`,
-                    fontSize: 13,
-                  }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>
-                      {c.subject}{c.chapter ? " · " + c.chapter : ""}
-                    </div>
-                    <div style={{ color: C.text, lineHeight: 1.4 }}>{c.front}</div>
-                  </div>
-                ))}
-                {dangerIds.size > 3 && (
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
-                    +{dangerIds.size - 3}개 더
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-        </div>
-      )}
-
-      {/* ── Exam Focus ── */}
-      {upcomingExams.length > 0 && (
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
-            다가오는 시험
-          </div>
-          {upcomingExams.slice(0, 2).map(exam => {
-            const days = daysUntil(exam.date);
-            const accent = days <= 7 ? C.danger : days <= 14 ? C.warning : C.primary;
-            const topics = (exam.directScope && exam.directScope.includedTopics) || [];
-            return (
-              <div key={exam.id} style={{ ...S.card, borderLeft: `4px solid ${accent}`, marginBottom: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: C.text }}>{exam.name}</div>
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{exam.subject} · {exam.date}</div>
-                    {topics.length > 0 && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-                        {topics.slice(0, 4).map((t, i) => <span key={i} style={S.badge(C.primary)}>{t}</span>)}
-                        {topics.length > 4 && <span style={S.badge(C.muted)}>+{topics.length - 4}</span>}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: accent, flexShrink: 0, marginLeft: 12 }}>
-                    D-{days}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
         </div>
       )}
 
