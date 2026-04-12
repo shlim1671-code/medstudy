@@ -119,10 +119,14 @@ SHARED STEM (공통 지문) RULE:
 - Include any tables, lists, or data that are part of the shared context.
 
 IMAGE HANDLING:
-- If text contains [IMAGE pXXX_iYY] markers, set image_present: true and
-  image_ref to the marker ID (e.g. "p003_i01").
-- If the question references "그림", "사진", "도표", "표" but no marker exists,
-  still set image_present: true and image_ref: null.
+- You can SEE the actual page images. If a question includes or references
+  a diagram, figure, photo, table, or any visual element, set image_present: true.
+- For image_ref, use the format "pXXX_iYY" where XXX is the zero-padded page number
+  and YY is the image index on that page (e.g. "p003_i01" for first image on page 3).
+  If you cannot determine a specific embedded image index, use "p003_i00" (page-level ref).
+- If text contains [IMAGE pXXX_iYY] markers (text-mode fallback), use those directly.
+- If a question references "그림", "사진", "도표", "표" with a visible image nearby,
+  set image_present: true and assign the appropriate image_ref.
 
 OUTPUT SCHEMA — for EACH question:
 {
@@ -3217,6 +3221,7 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
   }
 
   async function callGemini(textChunk, apiKey) {
+    // Text-only fallback mode
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
       {
@@ -3245,6 +3250,59 @@ ${textChunk}
     const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
     return safeJsonArrayFromText(rawText);
   }
+
+  async function callGeminiVision(pageImages, apiKey) {
+    // Vision mode: send page images to Gemini for direct visual extraction
+    // Process in batches of 5 pages to stay within token limits
+    const BATCH_SIZE = 5;
+    const allItems = [];
+    for (let i = 0; i < pageImages.length; i += BATCH_SIZE) {
+      const batch = pageImages.slice(i, i + BATCH_SIZE);
+      const parts = [];
+      // Add each page image
+      for (const pg of batch) {
+        parts.push({
+          inline_data: {
+            mime_type: "image/png",
+            data: pg.base64,
+          },
+        });
+        parts.push({ text: `[Above is page ${pg.page}]` });
+      }
+      // Add the extraction prompt at the end
+      parts.push({ text: PDF_PARSE_PROMPT });
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            generationConfig: {
+              maxOutputTokens: 65536,
+              temperature: 0,
+            },
+            contents: [{ parts }],
+          }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        const msg = json?.error?.message || `HTTP ${res.status}`;
+        console.error(`Vision batch ${Math.floor(i / BATCH_SIZE) + 1} failed: ${msg}`);
+        continue; // Skip failed batch, continue with others
+      }
+      const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+      try {
+        const items = safeJsonArrayFromText(rawText);
+        allItems.push(...items);
+      } catch (e) {
+        console.error(`Vision batch ${Math.floor(i / BATCH_SIZE) + 1} parse failed:`, e);
+      }
+    }
+    return allItems;
+  }
+
 
   async function migrateLegacy() {
     try {
@@ -3299,7 +3357,7 @@ ${textChunk}
       const subjectSlug = SUBJECT_SLUG_MAP[pdfForm.subjectKo] || "general";
       const ingestionBatchId = `pdf_${Date.now().toString(36)}`;
 
-      setPdfStatus({ phase: "텍스트 추출 중...", progress: 15 });
+      setPdfStatus({ phase: "PDF 페이지 변환 중...", progress: 15 });
       const formData = new FormData();
       formData.append("file", pdfForm.file);
       formData.append("subject", subjectSlug);
@@ -3315,40 +3373,97 @@ ${textChunk}
         console.warn("[MedStudy] imageMapping이 서버 응답에 없습니다. 이미지 연결 불가.");
       }
 
-      // Split text into chunks if too long (>15000 chars ≈ boundary for reliable extraction)
-      const CHUNK_SIZE = 15000;
-      const fullText = pdfJson.text || "";
+      // Vision-first extraction: send page images to Gemini Vision API
       let allParsedItems = [];
+      const pageImages = pdfJson.pageImages || [];
+      const fullText = pdfJson.text || "";
 
-      if (fullText.length <= CHUNK_SIZE) {
-        setPdfStatus({ phase: "문제 구조화 중...", progress: 55 });
-        allParsedItems = await callGemini(fullText, pdfForm.geminiApiKey.trim());
-      } else {
-        // Split by double newlines to avoid cutting mid-question
-        const paragraphs = fullText.split(/\n\n+/);
-        const chunks = [];
-        let current = "";
-        for (const p of paragraphs) {
-          if ((current + "\n\n" + p).length > CHUNK_SIZE && current.length > 0) {
-            chunks.push(current);
-            current = p;
+      if (pageImages.length > 0) {
+        // Vision mode: process pages as images in batches
+        const BATCH_SIZE = 5;
+        const totalBatches = Math.ceil(pageImages.length / BATCH_SIZE);
+        setPdfStatus({ phase: `Vision 분석 중... (0/${totalBatches})`, progress: 40 });
+
+        for (let i = 0; i < pageImages.length; i += BATCH_SIZE) {
+          const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+          setPdfStatus({
+            phase: `Vision 분석 중... (${batchNum}/${totalBatches})`,
+            progress: 40 + Math.round((batchNum / totalBatches) * 40),
+          });
+        }
+
+        try {
+          allParsedItems = await callGeminiVision(pageImages, pdfForm.geminiApiKey.trim());
+        } catch (e) {
+          console.error("Vision extraction failed, falling back to text:", e);
+          // Fallback to text-based extraction
+          allParsedItems = [];
+        }
+
+        // If vision returned nothing, fallback to text mode
+        if (allParsedItems.length === 0 && fullText.trim()) {
+          console.warn("[MedStudy] Vision returned 0 items, falling back to text extraction");
+          setPdfStatus({ phase: "텍스트 폴백 분석 중...", progress: 55 });
+          const CHUNK_SIZE = 15000;
+          if (fullText.length <= CHUNK_SIZE) {
+            allParsedItems = await callGemini(fullText, pdfForm.geminiApiKey.trim());
           } else {
-            current = current ? current + "\n\n" + p : p;
+            const paragraphs = fullText.split(/\n\n+/);
+            const chunks = [];
+            let current = "";
+            for (const p of paragraphs) {
+              if ((current + "\n\n" + p).length > CHUNK_SIZE && current.length > 0) {
+                chunks.push(current);
+                current = p;
+              } else {
+                current = current ? current + "\n\n" + p : p;
+              }
+            }
+            if (current) chunks.push(current);
+            for (let i = 0; i < chunks.length; i++) {
+              setPdfStatus({
+                phase: `텍스트 폴백 (${i + 1}/${chunks.length})`,
+                progress: 55 + Math.round((i / chunks.length) * 25),
+              });
+              try {
+                const items = await callGemini(chunks[i], pdfForm.geminiApiKey.trim());
+                allParsedItems.push(...items);
+              } catch (e) {
+                console.error(`Text chunk ${i + 1} failed:`, e);
+              }
+            }
           }
         }
-        if (current) chunks.push(current);
-
-        for (let i = 0; i < chunks.length; i++) {
-          setPdfStatus({
-            phase: `문제 구조화 중... (${i + 1}/${chunks.length})`,
-            progress: 40 + Math.round((i / chunks.length) * 40),
-          });
-          try {
-            const items = await callGemini(chunks[i], pdfForm.geminiApiKey.trim());
-            allParsedItems.push(...items);
-          } catch (e) {
-            console.error(`Chunk ${i + 1} failed:`, e);
-            // Continue with other chunks instead of failing entirely
+      } else {
+        // No page images available — pure text mode (legacy/fallback)
+        setPdfStatus({ phase: "문제 구조화 중...", progress: 55 });
+        const CHUNK_SIZE = 15000;
+        if (fullText.length <= CHUNK_SIZE) {
+          allParsedItems = await callGemini(fullText, pdfForm.geminiApiKey.trim());
+        } else {
+          const paragraphs = fullText.split(/\n\n+/);
+          const chunks = [];
+          let current = "";
+          for (const p of paragraphs) {
+            if ((current + "\n\n" + p).length > CHUNK_SIZE && current.length > 0) {
+              chunks.push(current);
+              current = p;
+            } else {
+              current = current ? current + "\n\n" + p : p;
+            }
+          }
+          if (current) chunks.push(current);
+          for (let i = 0; i < chunks.length; i++) {
+            setPdfStatus({
+              phase: `문제 구조화 중... (${i + 1}/${chunks.length})`,
+              progress: 40 + Math.round((i / chunks.length) * 40),
+            });
+            try {
+              const items = await callGemini(chunks[i], pdfForm.geminiApiKey.trim());
+              allParsedItems.push(...items);
+            } catch (e) {
+              console.error(`Chunk ${i + 1} failed:`, e);
+            }
           }
         }
       }

@@ -1,183 +1,142 @@
-import cgi
+import fitz  # PyMuPDF
+import base64
 import json
 import os
-import sys
-import time
-import traceback
-import uuid
-from io import BytesIO
-from urllib.parse import quote
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError
 from http.server import BaseHTTPRequestHandler
+import cgi
+import io
+import requests
 
-import fitz  # pymupdf
-
-MAX_PDF_BYTES = 50 * 1024 * 1024
-
-
-def json_response(handler, status, payload):
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    handler.send_response(status)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Content-Length", str(len(body)))
-    handler.end_headers()
-    handler.wfile.write(body)
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+BUCKET = "medstudy-images"
 
 
-def parse_multipart(handler):
-    ctype = handler.headers.get("content-type", "")
-    length = int(handler.headers.get("content-length", "0") or 0)
-    raw = handler.rfile.read(length)
-    env = {
-        "REQUEST_METHOD": "POST",
-        "CONTENT_TYPE": ctype,
-        "CONTENT_LENGTH": str(len(raw)),
+def upload_to_supabase(file_bytes, path):
+    """Upload bytes to Supabase Storage and return public URL."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return None
+    url = f"{SUPABASE_URL}/storage/v1/object/{BUCKET}/{path}"
+    headers = {
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "image/png",
+        "x-upsert": "true",
     }
-    form = cgi.FieldStorage(
-        fp=BytesIO(raw),
-        headers=handler.headers,
-        environ=env,
-        keep_blank_values=True,
-    )
-    return form
-
-
-def upload_png(supabase_url, service_key, bucket, path, png_bytes):
-    base = supabase_url.rstrip("/")
-    object_path = quote(path, safe="/")
-    upload_url = f"{base}/storage/v1/object/{bucket}/{object_path}"
-
-    req = Request(upload_url, data=png_bytes, method="PUT")
-    req.add_header("Authorization", f"Bearer {service_key}")
-    req.add_header("apikey", service_key)
-    req.add_header("Content-Type", "image/png")
-    req.add_header("x-upsert", "true")
-
     try:
-        with urlopen(req):
-            pass
-    except HTTPError as e:
-        detail = e.read().decode("utf-8", errors="ignore")
-        raise RuntimeError(f"Supabase upload failed ({e.code}): {detail}")
-
-    public_url = f"{base}/storage/v1/object/public/{bucket}/{object_path}"
-    return public_url
+        resp = requests.post(url, headers=headers, data=file_bytes)
+        if resp.status_code in (200, 201):
+            return f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET}/{path}"
+    except Exception:
+        pass
+    return None
 
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
-        if self.path != "/api/process-pdf":
-            return json_response(self, 404, {"error": "Not found"})
-
         try:
-            supabase_url = os.getenv("SUPABASE_URL", "")
-            service_key = os.getenv("SUPABASE_SERVICE_KEY", "")
-            if not supabase_url or not service_key:
-                return json_response(self, 500, {"error": "SUPABASE_URL / SUPABASE_SERVICE_KEY is required"})
+            content_type = self.headers.get("Content-Type", "")
+            if "multipart/form-data" not in content_type:
+                self._json_response(400, {"error": "multipart/form-data required"})
+                return
 
-            form = parse_multipart(self)
-            file_item = form["file"] if "file" in form else None
-            if file_item is None or not getattr(file_item, "file", None):
-                return json_response(self, 400, {"error": "file is required"})
+            # Parse multipart form
+            environ = {
+                "REQUEST_METHOD": "POST",
+                "CONTENT_TYPE": content_type,
+                "CONTENT_LENGTH": self.headers.get("Content-Length", "0"),
+            }
+            form = cgi.FieldStorage(
+                fp=self.rfile, headers=self.headers, environ=environ
+            )
 
-            pdf_bytes = file_item.file.read()
-            if len(pdf_bytes) > MAX_PDF_BYTES:
-                return json_response(self, 400, {"error": "PDF 파일 크기는 50MB를 초과할 수 없습니다."})
-
-            # Read optional metadata fields (kept for contract compatibility)
-            _subject = form.getfirst("subject", "general")
-            _exam_unit = form.getfirst("exam_unit", "unknown_exam")
-            _source_type = form.getfirst("source_type", "manual")
-            _source_detail = form.getfirst("source_detail", "")
-
-            ingestion_batch_id = f"pdf_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+            pdf_field = form["file"]
+            pdf_bytes = pdf_field.file.read()
+            subject = form.getfirst("subject", "general")
+            exam_unit = form.getfirst("exam_unit", "unknown")
+            source_type = form.getfirst("source_type", "past_exam")
+            source_detail = form.getfirst("source_detail", "")
 
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            page_count = len(doc)
+
+            # --- Phase A: Render each page as a PNG image (base64) ---
+            page_images = []  # list of { "page": 1, "base64": "...", "width": w, "height": h }
+            DPI = 200  # Balance between quality and size; 200 DPI ≈ 300-500KB per page
+            for page_num in range(page_count):
+                page = doc[page_num]
+                mat = fitz.Matrix(DPI / 72, DPI / 72)
+                pix = page.get_pixmap(matrix=mat)
+                img_bytes = pix.tobytes("png")
+                b64 = base64.b64encode(img_bytes).decode("utf-8")
+                page_images.append({
+                    "page": page_num + 1,
+                    "base64": b64,
+                    "width": pix.width,
+                    "height": pix.height,
+                })
+
+            # --- Phase B: Extract embedded images and upload to Supabase ---
             image_mapping = {}
             image_count = 0
-            page_texts = []
+            storage_prefix = f"{subject}/{exam_unit}/{source_type}"
+            if source_detail:
+                storage_prefix += f"/{source_detail}"
+            storage_prefix += "/images"
 
-            for p_idx, page in enumerate(doc, start=1):
-                page_images = page.get_images(full=True)
-                ref_by_xref = {}
-
-                for i_idx, img in enumerate(page_images, start=1):
-                    xref = img[0]
-                    ref = f"p{p_idx:03d}_i{i_idx:02d}"
-
-                    # Required by spec: use doc.extract_image(xref)
-                    extracted = doc.extract_image(xref)
-                    if not extracted or "image" not in extracted:
-                        continue
-
-                    pix = fitz.Pixmap(doc, xref)
-                    if pix.n > 4:
-                        pix = fitz.Pixmap(fitz.csRGB, pix)
-                    png_bytes = pix.tobytes("png")
-                    pix = None
-
-                    path = f"pdf/{ingestion_batch_id}/{ref}.png"
-                    url = upload_png(supabase_url, service_key, "card-images", path, png_bytes)
-                    image_mapping[ref] = {"url": url}
-                    ref_by_xref[xref] = ref
-                    image_count += 1
-
-                # Build a list of (y_position, content) tuples for proper ordering
-                elements = []
-
-                # Add text blocks with their y-position
-                blocks = page.get_text("dict").get("blocks", [])
-                for block in blocks:
-                    if block.get("type") == 0:  # text block
-                        y_pos = block.get("bbox", [0, 0, 0, 0])[1]
-                        for line in block.get("lines", []):
-                            spans = line.get("spans", [])
-                            text_line = "".join(span.get("text", "") for span in spans).strip()
-                            if text_line:
-                                line_y = line.get("bbox", [0, y_pos, 0, 0])[1]
-                                elements.append((line_y, text_line))
-
-                # Add image markers with their y-position from get_images + bbox
-                used_refs = set()
-                for img in page_images:
-                    xref = img[0]
-                    ref = ref_by_xref.get(xref)
-                    if not ref:
-                        continue
-                    # Try to find image position via page.get_image_rects
+            for page_num in range(page_count):
+                page = doc[page_num]
+                img_list = page.get_images(full=True)
+                for img_idx, img_info in enumerate(img_list):
+                    xref = img_info[0]
                     try:
-                        rects = page.get_image_rects(xref)
-                        if rects and len(rects) > 0:
-                            y_pos = rects[0].y0
-                        else:
-                            y_pos = float("inf")  # fallback: end of page
+                        base_image = doc.extract_image(xref)
+                        if not base_image:
+                            continue
+                        img_bytes_raw = base_image["image"]
+                        ext = base_image.get("ext", "png")
+
+                        # Convert to PNG if not already
+                        if ext != "png":
+                            pix_img = fitz.Pixmap(img_bytes_raw)
+                            if pix_img.alpha:
+                                pix_img = fitz.Pixmap(fitz.csRGB, pix_img)
+                            img_bytes_raw = pix_img.tobytes("png")
+
+                        image_ref = f"p{str(page_num + 1).zfill(3)}_i{str(img_idx + 1).zfill(2)}"
+                        storage_path = f"{storage_prefix}/{image_ref}.png"
+                        public_url = upload_to_supabase(img_bytes_raw, storage_path)
+
+                        image_mapping[image_ref] = {
+                            "url": public_url,
+                            "page": page_num + 1,
+                            "index": img_idx + 1,
+                        }
+                        image_count += 1
                     except Exception:
-                        y_pos = float("inf")
-                    elements.append((y_pos, f"[IMAGE {ref}]"))
-                    used_refs.add(ref)
+                        continue
 
-                # Fallback for any images not placed
-                for ref in ref_by_xref.values():
-                    if ref not in used_refs:
-                        elements.append((float("inf"), f"[IMAGE {ref}]"))
+            doc.close()
 
-                # Sort by y-position to maintain document order
-                elements.sort(key=lambda x: x[0])
-                parts = [content for _, content in elements]
+            # --- Phase C: Also extract raw text as fallback ---
+            doc2 = fitz.open(stream=pdf_bytes, filetype="pdf")
+            full_text = ""
+            for page in doc2:
+                full_text += page.get_text("text") + "\n\n"
+            doc2.close()
 
-                page_text = "\n".join(parts).strip()
-                page_texts.append(f"[PAGE {p_idx}]\n{page_text}" if page_text else f"[PAGE {p_idx}]")
-
-            full_text = "\n\n".join(page_texts).strip()
-            return json_response(self, 200, {
-                "text": full_text,
+            self._json_response(200, {
+                "pageImages": page_images,
+                "text": full_text.strip(),
                 "imageMapping": image_mapping,
                 "imageCount": image_count,
+                "pageCount": page_count,
             })
-        except Exception as e:
-            print(traceback.format_exc(), file=sys.stderr)
-            return json_response(self, 500, {"error": str(e)})
 
-    def do_GET(self):
-        return json_response(self, 405, {"error": "Method not allowed"})
+        except Exception as e:
+            self._json_response(500, {"error": str(e)})
+
+    def _json_response(self, status, data):
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode("utf-8"))
