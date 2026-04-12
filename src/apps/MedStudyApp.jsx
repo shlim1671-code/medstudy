@@ -461,26 +461,32 @@ function getDangerCardIds(reviewLog) {
 // ─────────────────────────────────────────
 // Design Tokens — Phase 7B-2
 // ─────────────────────────────────────────
-const C = {
-  bg:       "#161210",
-  surface:  "#1f1a16",
-  surface2: "#2a2218",
-  border:   "#3a2e24",
-  text:     "#e8e0d4",
-  muted:    "#8a7d70",
-  primary:  "#a07850",
-  success:  "#6a9e6a",
-  danger:   "#c46a5a",
-  warning:  "#c4a84a",
-  cardFace: "#f8f3ea",
-  cardText: "#2c2318",
-  cardBorder: "#d4c4a8",
-  paperText:  "#2c2318",
-  paperMuted: "#9a8870",
+const THEMES = {
+  light: {
+    bg: "#F2F2F7", surface: "#FFFFFF", surface2: "#F2F2F7",
+    border: "#E5E5EA", text: "#1C1C1E", muted: "#8E8E93",
+    primary: "#0EA5E9", primaryDim: "#E0F2FE", primaryText: "#0284C7",
+    success: "#16A34A", successDim: "#DCFCE7",
+    danger: "#DC2626", dangerDim: "#FEE2E2",
+    warning: "#D97706",
+    cardFace: "#FFFFFF", cardText: "#1C1C1E", cardBorder: "#E5E5EA",
+    paperText: "#1C1C1E", paperMuted: "#8E8E93",
+  },
+  dark: {
+    bg: "#111111", surface: "#1A1A1A", surface2: "#222222",
+    border: "#2A2A2A", text: "#E8E8EC", muted: "#6B7280",
+    primary: "#0EA5E9", primaryDim: "rgba(14,165,233,0.15)", primaryText: "#38BDF8",
+    success: "#4ADE80", successDim: "rgba(74,222,128,0.12)",
+    danger: "#F87171", dangerDim: "rgba(248,113,113,0.12)",
+    warning: "#FBBF24",
+    cardFace: "#1A1A1A", cardText: "#E8E8EC", cardBorder: "#2A2A2A",
+    paperText: "#E8E8EC", paperMuted: "#6B7280",
+  },
 };
+let C = THEMES.light;
 
-const FONT_HEADING = "'Playfair Display', Georgia, serif";
-const FONT_BODY = "'Noto Sans KR', system-ui, sans-serif";
+const FONT_HEADING = "'Pretendard', system-ui, -apple-system, sans-serif";
+const FONT_BODY = "'Pretendard', system-ui, -apple-system, sans-serif";
 
 const S = {
   card: {
@@ -505,9 +511,9 @@ const S = {
               : v === "success"  ? C.success
               : v === "danger"   ? C.danger
               : C.surface2,
-    color: v === "primary" ? "#1a1008"
-         : v === "success"  ? "#0e1f0e"
-         : v === "danger"   ? "#1f0c0a"
+    color: v === "primary" ? "#ffffff"
+         : v === "success"  ? "#ffffff"
+         : v === "danger"   ? "#ffffff"
          : C.text,
   }),
   input: {
@@ -562,7 +568,7 @@ const S = {
     flexDirection: "column",
     alignItems: "center",
     gap: 6,
-    background: v === "forgot" ? C.danger + "22" : C.success + "22",
+    background: v === "forgot" ? (C.dangerDim || C.danger + "22") : (C.successDim || C.success + "22"),
     color: v === "forgot" ? C.danger : C.success,
   }),
   badgePaper: (col = "#b84a2e", bg = "#f5e0da") => ({
@@ -655,6 +661,15 @@ export default function MedStudyApp() {
   });
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+  const [theme, setTheme] = useState(() =>
+    localStorage.getItem("medstudy-theme") || "light"
+  );
+  C = THEMES[theme];
+  const toggleTheme = () => {
+    const next = theme === "light" ? "dark" : "light";
+    localStorage.setItem("medstudy-theme", next);
+    setTheme(next);
+  };
 
   useEffect(() => {
     // Inject Google Fonts: Playfair Display + Noto Sans KR
@@ -662,7 +677,7 @@ export default function MedStudyApp() {
       const link = document.createElement("link");
       link.id = "medstudy-fonts";
       link.rel = "stylesheet";
-      link.href = "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap";
+      link.href = "https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap";
       document.head.appendChild(link);
     }
   }, []);
@@ -857,6 +872,12 @@ export default function MedStudyApp() {
           MedStudy <span style={{ color: C.primary }}>AI</span>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <button onClick={toggleTheme} style={{
+            background: "none", border: "none", cursor: "pointer",
+            fontSize: 18, padding: "4px 6px", borderRadius: 6, color: C.text,
+          }}>
+            {theme === "light" ? "🌙" : "☀️"}
+          </button>
           {dueCount > 0 && (
             <span style={S.badge(C.warning)}>{dueCount} 복습</span>
           )}
