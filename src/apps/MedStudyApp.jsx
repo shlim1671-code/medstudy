@@ -498,108 +498,112 @@ const dimColor = (col, alpha = "22") => (
 const FONT_HEADING = "'Pretendard', system-ui, -apple-system, sans-serif";
 const FONT_BODY = "'Pretendard', system-ui, -apple-system, sans-serif";
 
-const S = {
-  card: {
-    background: C.surface,
-    borderRadius: 12,
-    border: `1px solid ${C.border}`,
-    padding: "16px 18px",
-    marginBottom: 12,
-  },
-  cardInset: {
-    background: C.surface2,
-    borderRadius: 8,
-    border: `1px solid ${C.border}`,
-    padding: "10px 14px",
-    marginBottom: 8,
-  },
-  btn: (v = "primary") => ({
-    padding: "9px 18px", borderRadius: 8, border: "none", cursor: "pointer",
-    fontWeight: 600, fontSize: 13,
-    fontFamily: FONT_BODY,
-    background: v === "primary" ? C.primary
-              : v === "success"  ? C.success
-              : v === "danger"   ? C.danger
-              : C.surface2,
-    color: v === "primary" ? "#ffffff"
-         : v === "success"  ? "#ffffff"
-         : v === "danger"   ? "#ffffff"
-         : C.text,
-  }),
-  input: {
-    background: C.surface2,
-    border: `1px solid ${C.border}`,
-    borderRadius: 8,
-    padding: "8px 12px",
-    color: C.text,
-    fontSize: 14,
-    fontFamily: FONT_BODY,
-    width: "100%",
-    boxSizing: "border-box",
-  },
-  label: { fontSize: 12, color: C.muted, marginBottom: 4, display: "block", fontWeight: 500 },
-  badge: (col = C.primary) => ({
-    background: dimColor(col, "28"),
-    color: col,
-    padding: "2px 8px",
-    borderRadius: 9999,
-    fontSize: 11,
-    fontWeight: 600,
-    display: "inline-block",
-  }),
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: C.muted,
-    textTransform: "uppercase",
-    letterSpacing: "0.07em",
-    marginBottom: 8,
-    display: "block",
-  },
-  flashcard: {
-    background: C.cardFace,
-    borderRadius: 20,
-    border: `1px solid ${C.cardBorder}`,
-    padding: "32px 28px 24px",
-    marginBottom: 14,
-  },
-  btnAction: (v = "forgot") => ({
-    flex: 1,
-    padding: "16px 8px",
-    borderRadius: 14,
-    border: "none",
-    cursor: "pointer",
-    fontFamily: FONT_BODY,
-    fontWeight: 700,
-    fontSize: 12,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 6,
-    background: v === "forgot" ? (C.dangerDim || C.danger + "22") : (C.successDim || C.success + "22"),
-    color: v === "forgot" ? C.danger : C.success,
-  }),
-};
+function getStyles(c) {
+  return {
+    card: {
+      background: c.surface,
+      borderRadius: 12,
+      border: `1px solid ${c.border}`,
+      padding: "16px 18px",
+      marginBottom: 12,
+    },
+    cardInset: {
+      background: c.surface2,
+      borderRadius: 8,
+      border: `1px solid ${c.border}`,
+      padding: "10px 14px",
+      marginBottom: 8,
+    },
+    btn: (v = "primary") => ({
+      padding: "9px 18px", borderRadius: 8, border: "none", cursor: "pointer",
+      fontWeight: 600, fontSize: 13,
+      fontFamily: FONT_BODY,
+      background: v === "primary" ? c.primary
+        : v === "success" ? c.success
+          : v === "danger" ? c.danger
+            : c.surface2,
+      color: v === "primary" ? "#ffffff"
+        : v === "success" ? "#ffffff"
+          : v === "danger" ? "#ffffff"
+            : c.text,
+    }),
+    input: {
+      background: c.surface2,
+      border: `1px solid ${c.border}`,
+      borderRadius: 8,
+      padding: "8px 12px",
+      color: c.text,
+      fontSize: 14,
+      fontFamily: FONT_BODY,
+      width: "100%",
+      boxSizing: "border-box",
+    },
+    label: { fontSize: 12, color: c.muted, marginBottom: 4, display: "block", fontWeight: 500 },
+    badge: (col = c.primary) => ({
+      background: dimColor(col, "28"),
+      color: col,
+      padding: "2px 8px",
+      borderRadius: 9999,
+      fontSize: 11,
+      fontWeight: 600,
+      display: "inline-block",
+    }),
+    sectionLabel: {
+      fontSize: 11,
+      fontWeight: 700,
+      color: c.muted,
+      textTransform: "uppercase",
+      letterSpacing: "0.07em",
+      marginBottom: 8,
+      display: "block",
+    },
+    flashcard: {
+      background: c.cardFace,
+      borderRadius: 20,
+      border: `1px solid ${c.cardBorder}`,
+      padding: "32px 28px 24px",
+      marginBottom: 14,
+    },
+    btnAction: (v = "forgot") => ({
+      flex: 1,
+      padding: "16px 8px",
+      borderRadius: 14,
+      border: "none",
+      cursor: "pointer",
+      fontFamily: FONT_BODY,
+      fontWeight: 700,
+      fontSize: 12,
+      letterSpacing: "0.08em",
+      textTransform: "uppercase",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 6,
+      background: v === "forgot" ? (c.dangerDim || c.danger + "22") : (c.successDim || c.success + "22"),
+      color: v === "forgot" ? c.danger : c.success,
+    }),
+  };
+}
 
 // Typography helpers
-const T = {
-  heading: {
-    fontFamily: FONT_HEADING,
-    fontWeight: 700,
-    letterSpacing: "-0.02em",
-    color: C.text,
-  },
-  questionText: {
-    fontFamily: FONT_HEADING,
-    fontWeight: 500,
-    lineHeight: 1.65,
-    fontSize: 17,
-    color: C.text,
-    letterSpacing: "-0.01em",
-  },
-};
+function getTypography(c) {
+  return {
+    heading: {
+      fontFamily: FONT_HEADING,
+      fontWeight: 700,
+      letterSpacing: "-0.02em",
+      color: c.text,
+    },
+    questionText: {
+      fontFamily: FONT_HEADING,
+      fontWeight: 500,
+      lineHeight: 1.65,
+      fontSize: 17,
+      color: c.text,
+      letterSpacing: "-0.01em",
+    },
+  };
+}
 
 // ─────────────────────────────────────────
 // CardImage — 이미지 렌더링 공용 컴포넌트
@@ -663,6 +667,8 @@ export default function MedStudyApp() {
     localStorage.getItem("medstudy-theme") || "light"
   );
   C = THEMES[theme];
+  const S = getStyles(C);
+  const T = getTypography(C);
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : "light";
     localStorage.setItem("medstudy-theme", next);
@@ -849,7 +855,7 @@ export default function MedStudyApp() {
   const lastMileMode = getLastMileMode(upcomingExams);
   const dueCount = getDueCards(lastMileMode).length;
 
-  const pageProps = { data, updateData, logReview, updateSrs, getDueCards, getUpcomingExams, showToast, navigate: setPage, lastMileMode, refreshClusters };
+  const pageProps = { data, updateData, logReview, updateSrs, getDueCards, getUpcomingExams, showToast, navigate: setPage, lastMileMode, refreshClusters, S, T, C };
 
   const Pages = { home: HomePage, review: ReviewPage, quiz: QuizPage, flashcard: FlashcardPage, plan: PlanPage, stats: StatsPage, concepts: ConceptPage, manage: ManagePage, decision: DecisionTrainingPage, compress: CompressionPage };
   const PageComp = Pages[page] || HomePage;
@@ -943,7 +949,7 @@ export default function MedStudyApp() {
 // ─────────────────────────────────────────
 // HomePage — Phase 7B-2
 // ─────────────────────────────────────────
-function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode }) {
+function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode, S, T, C }) {
   const upcomingExams = getUpcomingExams();
   const dueCards      = getDueCards(lastMileMode);
   const dangerIds     = getDangerCardIds(data.reviewLog);
@@ -1285,7 +1291,7 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
 // ─────────────────────────────────────────
 // ReviewPage — Phase 4: Hybrid Priority + Last-Mile
 // ─────────────────────────────────────────
-function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpcomingExams, lastMileMode, refreshClusters, navigate }) {
+function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpcomingExams, lastMileMode, refreshClusters, navigate, S, T, C }) {
   const [sessionCards, setSessionCards] = useState(null);
   const [current, setCurrent] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -1529,7 +1535,7 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
 // ─────────────────────────────────────────
 // FlashcardPage
 // ─────────────────────────────────────────
-function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
+function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams, S, T, C }) {
   const [subject, setSubject] = useState("전체");
   const [examScope, setExamScope] = useState("전체");
   const [current, setCurrent] = useState(0);
@@ -1674,7 +1680,7 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
 // ─────────────────────────────────────────
 // QuizPage — Phase 3: 3모드 + review-log
 // ─────────────────────────────────────────
-function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
+function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, S, T, C }) {
   const [phase, setPhase] = useState("setup");
   const [config, setConfig] = useState({ mode: "question", subject: "전체", examScope: "전체", scopeType: "all", count: 10 });
   const [items, setItems] = useState([]);
@@ -1985,7 +1991,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
 // ─────────────────────────────────────────
 // PlanPage
 // ─────────────────────────────────────────
-function PlanPage({ data, updateData, showToast }) {
+function PlanPage({ data, updateData, showToast, S, T, C }) {
   const [view, setView] = useState("list");
   const [selectedExam, setSelectedExam] = useState(null);
   const [form, setForm] = useState({ name: "", subject: "", date: "", professorId: "", hoursPerDay: 3, directTopics: "", foundationTopics: "", includedConceptIds: "", excludedConceptIds: "", foundationConceptIds: "" });
@@ -2226,7 +2232,7 @@ function PlanPage({ data, updateData, showToast }) {
 // ─────────────────────────────────────────
 // StatsPage — Phase 3: review-log 기반
 // ─────────────────────────────────────────
-function StatsPage({ data }) {
+function StatsPage({ data, S, T, C }) {
   const reviewLog = data.reviewLog || [];
 
   const cardById = {};
@@ -2399,7 +2405,7 @@ function StatsPage({ data }) {
 // ─────────────────────────────────────────
 // ManagePage
 // ─────────────────────────────────────────
-function ManagePage({ data, updateData, showToast }) {
+function ManagePage({ data, updateData, showToast, S, T, C }) {
   const [tab, setTab] = useState("cards");
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -3230,7 +3236,7 @@ function rebuildConceptLinks(concept, cards, questions) {
 // ─────────────────────────────────────────
 // ConceptPage — Phase 5
 // ─────────────────────────────────────────
-function ConceptPage({ data, updateData, showToast }) {
+function ConceptPage({ data, updateData, showToast, S, T, C }) {
   const [view, setView] = useState("list");          // list | detail | create | edit
   const svgRef = useRef(null);
   const [mapSubject, setMapSubject] = useState("전체");
@@ -3789,7 +3795,7 @@ function ConceptPage({ data, updateData, showToast }) {
 // Distractors are other cards within the same cluster (same subject+chapter, also wrong before).
 // After a wrong answer, shows short distinction-focused corrective feedback.
 // ─────────────────────────────────────────
-function DecisionTrainingPage({ data, logReview, showToast, refreshClusters }) {
+function DecisionTrainingPage({ data, logReview, showToast, refreshClusters, S, T, C }) {
   const [clusterId, setClusterId] = useState(null);
   const [session, setSession] = useState(null);
   const [current, setCurrent] = useState(0);
@@ -4010,7 +4016,7 @@ function DecisionTrainingPage({ data, logReview, showToast, refreshClusters }) {
 // All content (front + back) visible immediately — no flip.
 // Tap "확인" to mark scanned. Tap "해설 보기" for explanation.
 // ─────────────────────────────────────────
-function CompressionPage({ data, getUpcomingExams }) {
+function CompressionPage({ data, getUpcomingExams, S, T, C }) {
   const [expanded, setExpanded] = useState({});
   const [scanned, setScanned] = useState({});
   const [examScope, setExamScope] = useState("전체");
