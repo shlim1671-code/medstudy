@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import * as d3 from "d3";
 import { sGet, sSet } from "../lib/storage";
 
 // ─────────────────────────────────────────
@@ -17,6 +18,13 @@ const SK = {
   legacyQuiz: "medstudy:custom-quiz",
   confusionClusters: "medstudy:confusion-clusters",
 };
+
+const SUBJECT_SUGGESTIONS = [
+  "해부학", "생리학", "생화학", "약리학", "병리학",
+  "미생물학", "면역학", "예방의학", "내과학", "외과학",
+  "산부인과학", "소아과학", "정신건강의학", "신경과학",
+  "영상의학", "마취과학", "기타",
+];
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -40,6 +48,128 @@ function normalizeIntent(raw) {
   if (!raw) return "definition";
   if (VALID_INTENTS_7.includes(raw)) return raw;
   return INTENT_LEGACY_MAP_7[raw] || "definition";
+}
+
+const SOURCE_TYPE_WEIGHTS = {
+  past_exam: 5,
+  slide: 3,
+  note: 2,
+  textbook: 1,
+  manual: 1,
+};
+const SOURCE_TYPE_LABELS = {
+  past_exam: "기출",
+  slide: "슬라이드",
+  note: "노트",
+  textbook: "교과서",
+  manual: "직접입력",
+};
+const SUBJECT_SLUG_MAP = {
+  해부학: "anatomy",
+  생리학: "physiology",
+  생화학: "biochemistry",
+  약리학: "pharmacology",
+  병리학: "pathology",
+  미생물학: "microbiology",
+  기타: "general",
+};
+
+const PDF_PARSE_PROMPT = `
+You are an expert data extraction engine specialized in Korean medical school exam documents.
+Your task: read the ENTIRE document first, then extract ALL questions into a JSON array.
+
+=== PHASE 1: UNDERSTAND THE DOCUMENT ===
+Before extracting, mentally map the document:
+- Identify the question numbering style used (e.g. "1번", "1.", "Q1", etc.)
+- Identify where answer choices appear (inline, in shared option boxes before/after questions, or not at all)
+- Identify where answers appear (inline, end-of-page key, last-page table, not present)
+- Identify non-question content to ignore (intro paragraphs, professor names, section headers, announcements)
+
+=== PHASE 2: COLLECT SHARED RESOURCES ===
+Some documents place shared option boxes and answer keys separately from questions.
+- Shared option box: a labeled box like "[5-6번] 보기: 1.A 2.B 3.C" — note which question numbers it applies to
+- Answer key: may appear as a table, a numbered list, or inline markers (e.g. ③, ans:2, 정답:③)
+- Circled number mapping: ① → 1, ② → 2, ③ → 3, ④ → 4, ⑤ → 5
+Collect these before extraction so you can attach them to the right questions.
+
+=== PHASE 3: EXTRACT ALL QUESTIONS ===
+Extract every question you identified. For each question output:
+
+{
+  "raw_question": "<full original stem + any inline options, exactly as written>",
+  "options": [
+    { "text": "<option text>", "correct": true/false }
+  ],
+  "canonicalAnswer": "<correct answer text, or null if unknown>",
+  "type": "objective" | "subjective",
+  "image_present": true | false,
+  "image_ref": "<e.g. p003_i01, or null>",
+  "confidence": "HIGH" | "MEDIUM" | "NONE"
+}
+
+RULES:
+- raw_question: include the question number and full stem. For shared-stem questions, duplicate the full shared stem into EACH sub-question.
+- options: use inline choices if present; use shared option box if applicable; use [] if truly no choices exist.
+- correct: mark true only if the answer key confirms it. Otherwise false for all options.
+- canonicalAnswer: full text of correct option (objective) or written answer (subjective). null if not in key.
+- type: "objective" if the answer is chosen from options. "subjective" if open-ended, fill-in-blank, or written answer.
+- image_present: true if there is an image, diagram, or [IMAGE ...] marker in or immediately adjacent to the question.
+- confidence: "HIGH" if answer confirmed by key. "MEDIUM" if answer strongly implied. "NONE" if absent from key.
+
+CRITICAL RULES:
+- Extract ALL questions. Never skip a question because the answer is missing.
+- Ignore ALL non-question text: intros, announcements, professor names, section titles, answer keys themselves.
+- Do not solve, explain, or add any content not present in the original document.
+- Handle any numbering or formatting style — there is no single fixed format.
+
+Return ONLY a valid JSON array. No markdown fences, no explanation, no preamble.
+`.trim();
+
+function normalizeConfidence(raw) {
+  const v = (raw || "").toString().toUpperCase();
+  if (v === "HIGH") return "high";
+  if (v === "MEDIUM") return "medium";
+  return "none";
+}
+
+function safeJsonArrayFromText(text) {
+  try {
+    const cleaned = (text || "")
+      .trim()
+      .replace(/^```json[\r\n]*/i, "")
+      .replace(/^```[\r\n]*/, "")
+      .replace(/[\r\n]*```\s*$/, "")
+      .trim();
+    const parsed = JSON.parse(cleaned);
+    if (!Array.isArray(parsed)) throw new Error("JSON 배열이 아닙니다.");
+    return parsed;
+  } catch (e) {
+    // Partial recovery: try to salvage a truncated array
+    const match = (text || "").match(/(\[[\s\S]*\})/);
+    if (match) {
+      try {
+        const recovered = JSON.parse(match[1] + "]");
+        if (Array.isArray(recovered) && recovered.length > 0) return recovered;
+      } catch {}
+    }
+    throw new Error(`Gemini 응답 파싱 실패: ${e.message}`);
+  }
+}
+
+function inferSourceTypeFromTags(tags = []) {
+  const lowered = tags.map(t => (t || "").toLowerCase());
+  if (lowered.some(t => t.includes("기출") || t.includes("past"))) return "past_exam";
+  if (lowered.some(t => t.includes("슬라이드") || t.includes("slide"))) return "slide";
+  if (lowered.some(t => t.includes("노트") || t.includes("note"))) return "note";
+  if (lowered.some(t => t.includes("교과서") || t.includes("textbook"))) return "textbook";
+  return "manual";
+}
+
+function getSourceWeight(card) {
+  const explicit = card?.source_type;
+  if (explicit && SOURCE_TYPE_WEIGHTS[explicit]) return SOURCE_TYPE_WEIGHTS[explicit];
+  const inferred = inferSourceTypeFromTags(card?.tags || []);
+  return SOURCE_TYPE_WEIGHTS[inferred] || 1;
 }
 
 function daysUntil(dateStr) {
@@ -71,12 +201,8 @@ function sm2Update(srs, grade) {
 // ─────────────────────────────────────────
 
 function calcImportance(card, reviewLog, questions = [], confusionClusters = []) {
-  // SourceWeight: 기출 태그 있으면 5, 슬라이드=3, 노트=2, 교과서=1, 기본=1
   const tags = (card.tags || []).map(t => t.toLowerCase());
-  let sourceWeight = 1.0;
-  if (tags.some(t => t.includes("기출") || t.includes("past"))) sourceWeight = 5;
-  else if (tags.some(t => t.includes("슬라이드") || t.includes("slide"))) sourceWeight = 3;
-  else if (tags.some(t => t.includes("노트") || t.includes("note"))) sourceWeight = 2;
+  const sourceWeight = getSourceWeight(card);
 
   // Phase 7A — Frequency: count DISTINCT occurrences (different year/exam)
   // - exact_duplicate: do NOT count (same exam, same occurrence_key)
@@ -176,6 +302,54 @@ function getLastMileMode(upcomingExams) {
   if (days <= 3) return "D3";
   if (days <= 7) return "D7";
   return null;
+}
+
+function filterByExamScopeTyped(items, exams, examId, scopeType = "all") {
+  if (examId === "전체") return items;
+  const exam = (exams || []).find(e => e.id === examId);
+  if (!exam) return items;
+
+  const directConceptIds = exam.included_concept_ids || [];
+  const foundationConceptIds = exam.foundation_concept_ids || [];
+  const excludedConceptIds = exam.excluded_concept_ids || [];
+  const directTopics = ((exam.directScope && exam.directScope.includedTopics) || []).map(t => t.toLowerCase());
+  const foundationTopics = ((exam.foundationScope && exam.foundationScope.topics) || []).map(t => t.toLowerCase());
+
+  const conceptIds =
+    scopeType === "direct" ? directConceptIds
+      : scopeType === "foundation" ? foundationConceptIds
+        : [...new Set([...directConceptIds, ...foundationConceptIds])];
+
+  const topics =
+    scopeType === "direct" ? directTopics
+      : scopeType === "foundation" ? foundationTopics
+        : [...new Set([...directTopics, ...foundationTopics])];
+
+  if (conceptIds.length === 0 && excludedConceptIds.length === 0 && topics.length === 0) return items;
+
+  return items.filter(item => {
+    const d = item.data || item;
+
+    if (excludedConceptIds.length > 0 && d.primary_concept_id &&
+      excludedConceptIds.includes(d.primary_concept_id)) return false;
+
+    if (conceptIds.length > 0 && d.primary_concept_id && conceptIds.includes(d.primary_concept_id)) return true;
+
+    if (topics.length > 0) {
+      const tags = (d.tags || []).map(t => t.toLowerCase());
+      const isQuizItem = item && typeof item === "object" && Object.prototype.hasOwnProperty.call(item, "type");
+      if (isQuizItem && item.type === "question") {
+        const subj = (d.subject || "").toLowerCase();
+        return topics.some(t => subj.includes(t) || tags.some(tg => tg.includes(t)));
+      }
+      const chapter = (d.chapter || "").toLowerCase();
+      const subj = (d.subject || "").toLowerCase();
+      return topics.some(t => chapter.includes(t) || subj.includes(t) || tags.some(tg => tg.includes(t)));
+    }
+
+    if (conceptIds.length > 0) return false;
+    return true;
+  });
 }
 
 // ─────────────────────────────────────────
@@ -288,22 +462,30 @@ function getDangerCardIds(reviewLog) {
 // Design Tokens — Phase 7B-2
 // ─────────────────────────────────────────
 const C = {
-  bg:       "#141c28",
-  surface:  "#1e2d42",   // slightly brighter — better bg/card separation
-  surface2: "#263350",   // nested surface
-  border:   "#304060",   // brighter border — cards pop more
-  text:     "#e4edf8",   // slightly brighter for faster scanning
-  muted:    "#92a4be",   // a touch brighter than before
-  primary:  "#6aafe6",
-  success:  "#5dc87e",
-  danger:   "#e07070",
-  warning:  "#cdb94a",
+  bg:       "#161210",
+  surface:  "#1f1a16",
+  surface2: "#2a2218",
+  border:   "#3a2e24",
+  text:     "#e8e0d4",
+  muted:    "#8a7d70",
+  primary:  "#a07850",
+  success:  "#6a9e6a",
+  danger:   "#c46a5a",
+  warning:  "#c4a84a",
+  cardFace: "#f8f3ea",
+  cardText: "#2c2318",
+  cardBorder: "#d4c4a8",
+  paperText:  "#2c2318",
+  paperMuted: "#9a8870",
 };
+
+const FONT_HEADING = "'Playfair Display', Georgia, serif";
+const FONT_BODY = "'Noto Sans KR', system-ui, sans-serif";
 
 const S = {
   card: {
     background: C.surface,
-    borderRadius: 10,
+    borderRadius: 12,
     border: `1px solid ${C.border}`,
     padding: "16px 18px",
     marginBottom: 12,
@@ -318,11 +500,15 @@ const S = {
   btn: (v = "primary") => ({
     padding: "9px 18px", borderRadius: 8, border: "none", cursor: "pointer",
     fontWeight: 600, fontSize: 13,
+    fontFamily: "'Noto Sans KR', system-ui, sans-serif",
     background: v === "primary" ? C.primary
               : v === "success"  ? C.success
               : v === "danger"   ? C.danger
               : C.surface2,
-    color: (v === "default" || v === "muted") ? C.text : "#111a28",
+    color: v === "primary" ? "#1a1008"
+         : v === "success"  ? "#0e1f0e"
+         : v === "danger"   ? "#1f0c0a"
+         : C.text,
   }),
   input: {
     background: C.surface2,
@@ -331,6 +517,7 @@ const S = {
     padding: "8px 12px",
     color: C.text,
     fontSize: 14,
+    fontFamily: "'Noto Sans KR', system-ui, sans-serif",
     width: "100%",
     boxSizing: "border-box",
   },
@@ -353,6 +540,61 @@ const S = {
     marginBottom: 8,
     display: "block",
   },
+  flashcard: {
+    background: C.cardFace,
+    borderRadius: 20,
+    border: `1px solid ${C.cardBorder}`,
+    padding: "32px 28px 24px",
+    marginBottom: 14,
+  },
+  btnAction: (v = "forgot") => ({
+    flex: 1,
+    padding: "16px 8px",
+    borderRadius: 14,
+    border: "none",
+    cursor: "pointer",
+    fontFamily: FONT_BODY,
+    fontWeight: 700,
+    fontSize: 12,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 6,
+    background: v === "forgot" ? C.danger + "22" : C.success + "22",
+    color: v === "forgot" ? C.danger : C.success,
+  }),
+  badgePaper: (col = "#b84a2e", bg = "#f5e0da") => ({
+    background: bg,
+    color: col,
+    padding: "3px 9px",
+    borderRadius: 6,
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    display: "inline-block",
+    fontFamily: FONT_BODY,
+  }),
+};
+
+// Typography helpers
+const T = {
+  heading: {
+    fontFamily: "'Playfair Display', Georgia, serif",
+    fontWeight: 700,
+    letterSpacing: "-0.02em",
+    color: C.text,
+  },
+  questionText: {
+    fontFamily: "'Playfair Display', Georgia, serif",
+    fontWeight: 500,
+    lineHeight: 1.65,
+    fontSize: 17,
+    color: C.text,
+    letterSpacing: "-0.01em",
+  },
 };
 
 // ─────────────────────────────────────────
@@ -372,12 +614,12 @@ function CardImage({ image_url, image_present, image_ref }) {
       <div style={{
         margin: "10px 0",
         padding: "8px 12px",
-        background: "#1e2d42",
+        background: C.surface,
         borderRadius: 8,
         textAlign: "center",
-        color: "#92a4be",
+        color: C.muted,
         fontSize: 12,
-        border: "1px dashed #304060",
+        border: `1px dashed ${C.border}`,
       }}>
         [이미지 없음{image_ref ? ` — ${image_ref}` : ""}]
       </div>
@@ -393,7 +635,7 @@ function CardImage({ image_url, image_present, image_ref }) {
         maxWidth: "100%",
         maxHeight: 300,
         objectFit: "contain",
-        background: "#1e2d42",
+        background: C.surface,
         borderRadius: 8,
         margin: "10px 0",
         display: "block",
@@ -414,6 +656,23 @@ export default function MedStudyApp() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
 
+  useEffect(() => {
+    // Inject Google Fonts: Playfair Display + Noto Sans KR
+    if (!document.getElementById("medstudy-fonts")) {
+      const link = document.createElement("link");
+      link.id = "medstudy-fonts";
+      link.rel = "stylesheet";
+      link.href = "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap";
+      document.head.appendChild(link);
+    }
+  }, []);
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap";
+    document.head.appendChild(link);
+  }, []);
+
   useEffect(() => { init(); }, []);
 
   async function init() {
@@ -422,8 +681,15 @@ export default function MedStudyApp() {
       sGet(SK.srs), sGet(SK.reviewLog), sGet(SK.exams), sGet(SK.concepts),
       sGet(SK.legacyQuiz), sGet(SK.confusionClusters),
     ]);
-    const cardsArr = cards || [];
+    const cardsRaw = cards || [];
     const reviewLogArr = reviewLog || [];
+    const cardsArr = cardsRaw.map(c => {
+      if (c.source_type) return c;
+      return { ...c, source_type: inferSourceTypeFromTags(c.tags || []) };
+    });
+    if (cardsRaw.some((c, i) => c.source_type !== cardsArr[i].source_type)) {
+      sSet(SK.cards, cardsArr);
+    }
     // Phase 7A: retroactively normalize question_intent + backfill confirmed_source on load
     const questionsArr = (questions || []).map(q => {
       const normalized = normalizeQuestionIntent(q.question_intent);
@@ -441,7 +707,7 @@ export default function MedStudyApp() {
     const autoClusters = inferConfusionClusters(cardsArr, reviewLogArr, questionsArr);
     const allClusters = mergeConfusionClusters(manualClusters, autoClusters);
     setData({
-      cards: cardsArr, questions: questions || [], professors: professors || [],
+      cards: cardsArr, questions: questionsArr, professors: professors || [],
       srs: srs || {}, reviewLog: reviewLogArr, exams: exams || [],
       concepts: concepts || [],
       confusionClusters: allClusters,
@@ -491,7 +757,7 @@ export default function MedStudyApp() {
     const now = new Date();
     const upcoming = getUpcomingExams();
     const nearestDays = upcoming.length > 0 ? daysUntil(upcoming[0].date) : null;
-    let pool = data.cards || [];
+    let pool = (data.cards || []).filter(c => c.status !== "archived");
 
     // Phase 6: Danger-only mode
     if (lastMileMode === "danger") {
@@ -584,10 +850,10 @@ export default function MedStudyApp() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", fontSize: 14 }}>
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'Noto Sans KR', system-ui, sans-serif", fontSize: 14 }}>
       {/* Header */}
-      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: C.text, letterSpacing: "-0.01em" }}>
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
+        <div style={{ fontWeight: 700, fontSize: 16, color: C.text, letterSpacing: "-0.01em", fontFamily: "'Playfair Display', Georgia, serif" }}>
           MedStudy <span style={{ color: C.primary }}>AI</span>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -609,13 +875,13 @@ export default function MedStudyApp() {
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: "fixed", top: 60, right: 20, zIndex: 999, padding: "10px 16px", borderRadius: 8, background: toast.type === "error" ? C.danger : C.success, color: "#1a1f2e", fontWeight: 600, fontSize: 14, boxShadow: "0 4px 12px rgba(0,0,0,0.4)" }}>
+        <div style={{ position: "fixed", top: 60, right: 20, zIndex: 999, padding: "10px 16px", borderRadius: 10, background: toast.type === "error" ? C.danger : C.success, color: "#1a1008", fontWeight: 700, fontSize: 13, border: `1px solid ${toast.type === "error" ? C.danger : C.success}`, fontFamily: FONT_BODY }}>
           {toast.msg}
         </div>
       )}
 
       {/* Nav — primary actions | secondary tools */}
-      <div style={{ display: "flex", overflowX: "auto", background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", overflowX: "auto", background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 4px" }}>
         {navItems.map((n, i) => {
           const isPrimary = navPrimary.some(p => p.id === n.id);
           const isActive  = page === n.id;
@@ -636,7 +902,7 @@ export default function MedStudyApp() {
                   color: isActive ? C.primary : isPrimary ? C.text : C.muted,
                   fontWeight: isActive ? 700 : isPrimary ? 500 : 400,
                   borderBottom: `2px solid ${isActive ? C.primary : "transparent"}`,
-                  fontSize: isPrimary ? 13 : 12,
+                  fontSize: 13,
                   whiteSpace: "nowrap",
                   opacity: !isPrimary && !isActive ? 0.8 : 1,
                 }}>
@@ -675,6 +941,18 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
     const st = (data.srs[c.id] && data.srs[c.id].state) || "new";
     if (stateCounts[st] !== undefined) stateCounts[st]++;
   });
+  const streak = (() => {
+    const days = new Set(
+      (data.reviewLog || []).map(l => new Date(l.timestamp).toDateString())
+    );
+    let count = 0;
+    let d = new Date();
+    while (days.has(d.toDateString())) {
+      count++;
+      d = new Date(d - 86400000);
+    }
+    return count;
+  })();
 
   const lmCfg = {
     D7: { label: "D-7 집중 모드", color: C.warning, desc: "마스터된 카드 제외 · 취약 항목 우선" },
@@ -690,14 +968,55 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
   const hasDue      = dueCards.length > 0;
 
   return (
-    <div>
+    <div style={{ display: "grid", gap: 12 }}>
+      {/* 인사말 */}
+      <div style={{ marginBottom: 4 }}>
+        <div style={{
+          fontFamily: "'Gowun Batang', serif",
+          fontSize: 22,
+          color: "#c4b89a",
+          lineHeight: 1.3,
+          fontWeight: 400,
+        }}>
+          오늘도 화이팅
+        </div>
+        <div style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: C.muted,
+          letterSpacing: "0.07em",
+          textTransform: "uppercase",
+          marginTop: 3,
+        }}>
+          {new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" })}
+        </div>
+      </div>
+
+      {/* 3열 스탯 그리드 */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 4 }}>
+        {[
+          ["복습 대기", dueCards.length, C.warning],
+          ["연속 학습", streak + "일", C.primary],
+          ["마스터", stateCounts.mastered, C.success],
+        ].map(([label, val, col]) => (
+          <div key={label} style={{
+            background: C.surface,
+            border: `1px solid ${C.border}`,
+            borderRadius: 10,
+            padding: "12px 14px",
+          }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: col, lineHeight: 1 }}>{val}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{label}</div>
+          </div>
+        ))}
+      </div>
 
       {/* ── Last-Mile banner — only when active ── */}
       {lastMileMode && lmCfg[lastMileMode] && (
         <div style={{
           background: lmCfg[lastMileMode].color + "18",
           border: `1px solid ${lmCfg[lastMileMode].color}`,
-          borderRadius: 10, padding: "11px 16px", marginBottom: 12,
+          borderRadius: 10, padding: "11px 16px",
           display: "flex", justifyContent: "space-between", alignItems: "center",
         }}>
           <div>
@@ -719,7 +1038,6 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
         borderLeft: `4px solid ${hasDue ? C.primary : C.success}`,
         borderRadius: 10,
         padding: "20px 20px 16px",
-        marginBottom: 12,
       }}>
         {/* Top row: label + exam countdown */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
@@ -800,7 +1118,7 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
       </div>
 
       {/* ── Secondary quick actions — clear subordinate role ── */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button
           onClick={() => navigate("quiz")}
           style={{ ...S.btn("primary"), fontSize: 13, padding: "8px 16px" }}>
@@ -823,7 +1141,6 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
         <div style={{
           ...S.card,
           borderLeft: `4px solid ${C.danger}`,
-          marginBottom: 12,
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ flex: 1 }}>
@@ -872,12 +1189,38 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
               )}
             </div>
           </div>
+          {dangerIds.size > 0 && (() => {
+            const dangerCards = (data.cards || [])
+              .filter(c => dangerIds.has(c.id))
+              .slice(0, 3);
+            return (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+                {dangerCards.map(c => (
+                  <div key={c.id} style={{
+                    padding: "6px 0",
+                    borderBottom: `1px solid ${C.border}`,
+                    fontSize: 13,
+                  }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 2 }}>
+                      {c.subject}{c.chapter ? " · " + c.chapter : ""}
+                    </div>
+                    <div style={{ color: C.text, lineHeight: 1.4 }}>{c.front}</div>
+                  </div>
+                ))}
+                {dangerIds.size > 3 && (
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
+                    +{dangerIds.size - 3}개 더
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 
       {/* ── Exam Focus ── */}
       {upcomingExams.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
+        <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
             다가오는 시험
           </div>
@@ -968,7 +1311,7 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
   if (!sessionCards) {
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary }}>복습</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>복습</h2>
         {modeOptions.length > 1 && (
           <div style={{ ...S.card, marginBottom: 14 }}>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>복습 모드 선택</div>
@@ -980,6 +1323,34 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
             {selectedMode !== "normal" && (
               <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>{(modeOptions.find(m => m.id === selectedMode) || {}).desc || ""} · {dueCount}장 대기</div>
             )}
+          </div>
+        )}
+        {nearestDays !== null && nearestDays <= 3 && (
+          <div style={{
+            background: C.danger + "18",
+            border: `1px solid ${C.danger}`,
+            borderRadius: 10, padding: "10px 14px", marginBottom: 12,
+          }}>
+            <div style={{ fontWeight: 700, color: C.danger, fontSize: 13 }}>
+              ⚠️ D-{nearestDays} — 시험 직전 모드
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+              정확한 의학 용어로 답하세요. 유사 표현은 오답으로 처리됩니다.
+            </div>
+          </div>
+        )}
+        {nearestDays !== null && nearestDays > 3 && nearestDays <= 7 && (
+          <div style={{
+            background: C.warning + "18",
+            border: `1px solid ${C.warning}`,
+            borderRadius: 10, padding: "10px 14px", marginBottom: 12,
+          }}>
+            <div style={{ fontWeight: 700, color: C.warning, fontSize: 13 }}>
+              D-{nearestDays} — 집중 복습 권장
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+              {nearestExam && nearestExam.name} · 취약 항목 위주로 복습하세요.
+            </div>
           </div>
         )}
         {dueCount === 0 ? (
@@ -1006,7 +1377,7 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
     if (wrongItems.length > 0 && refreshClusters) refreshClusters();
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary }}>복습 완료</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>복습 완료</h2>
         <div style={S.card}>
           <div style={{ fontSize: 36, fontWeight: 700, color: acc >= 70 ? C.success : C.warning, marginBottom: 4 }}>{acc + "%"}</div>
           <div style={{ color: C.muted }}>{correct + "/" + sessionLog.length + " 정답"}</div>
@@ -1056,9 +1427,9 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
       {/* Progress + metadata row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, fontSize: 12, color: C.muted }}>
         <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-          <span style={S.badge(stateColors[cardState] || C.muted)}>{cardState}</span>
-          {isDangerCard && <span style={S.badge(C.danger)}>위험</span>}
-          <span style={S.badge(importance >= 3 ? C.danger : importance >= 1.5 ? C.warning : C.muted)}>imp {importance.toFixed(1)}</span>
+          <span style={S.badgePaper("#8a7f6e", "#ece8de")}>{cardState}</span>
+          {isDangerCard && <span style={S.badgePaper("#b84a2e", "#f5e0da")}>위험</span>}
+          <span style={S.badgePaper("#5a7a52", "#e8eee6")}>imp {importance.toFixed(1)}</span>
         </div>
         <span style={{ fontWeight: 500 }}>{(current + 1)} / {sessionCards.length}</span>
       </div>
@@ -1070,25 +1441,40 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
       <div
         onClick={() => { if (!flipped) setFlipped(true); }}
         style={{
-          ...S.card,
+          ...S.flashcard,
           minHeight: 200,
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",
           textAlign: "center",
           cursor: flipped ? "default" : "pointer",
-          borderLeft: isDangerCard ? `3px solid ${C.danger}` : undefined,
-          padding: "24px 20px",
+          borderLeft: "none",
         }}
       >
-        <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, letterSpacing: "0.04em" }}>
+        <div style={{ fontSize: 11, color: C.paperMuted, marginBottom: 10, letterSpacing: "0.04em", fontFamily: FONT_BODY }}>
           {card.subject}{card.chapter ? " · " + card.chapter : ""}
         </div>
-        <div style={{ fontSize: flipped ? 17 : 19, fontWeight: 600, lineHeight: 1.65, color: flipped ? C.primary : C.text }}>
-          {flipped ? card.back : card.front}
-        </div>
+        {!flipped && <div style={{ fontFamily: FONT_HEADING, fontSize: 19, fontWeight: 700, lineHeight: 1.6, color: C.paperText, textAlign: "center", marginBottom: 20, wordBreak: "keep-all" }}>{card.front}</div>}
+        {flipped && (
+          <>
+            <div style={{ fontFamily: FONT_HEADING, fontSize: 19, fontWeight: 700, lineHeight: 1.6, color: C.paperText, textAlign: "center", marginBottom: 20, wordBreak: "keep-all" }}>{card.front}</div>
+            <hr style={{ border: "none", borderTop: "1px solid #e4ddd1", margin: "0 8px 18px", width: "100%" }} />
+            <div style={{ fontFamily: FONT_BODY, fontSize: 15, color: "#5a5048", lineHeight: 1.65, textAlign: "center", marginBottom: 12 }}>
+              {card.back}
+            </div>
+            {card.acceptedVariants && card.acceptedVariants.length > 0 && (
+              <div style={{
+                background: "#f2ece0", borderRadius: 8, padding: "8px 12px",
+                fontSize: 11, color: "#9a9082", textAlign: "center", marginBottom: 8,
+                fontFamily: FONT_BODY,
+              }}>
+                허용 표현: {card.acceptedVariants.join(" · ")}
+              </div>
+            )}
+          </>
+        )}
         <CardImage image_url={card.image_url} image_present={card.image_present} image_ref={card.image_ref} />
         {flipped && card.explanations && card.explanations.quick && (
-          <div style={{ marginTop: 14, fontSize: 12, color: C.muted, maxWidth: 440, lineHeight: 1.6, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+          <div style={{ background: "#f2ece0", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#9a9082", lineHeight: 1.6, textAlign: "center", fontFamily: FONT_BODY, marginTop: 10, maxWidth: 440 }}>
             {card.explanations.quick}
           </div>
         )}
@@ -1097,21 +1483,24 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
         )}
       </div>
       {/* Grade buttons — only shown after flip */}
+      {flipped && nearestDays !== null && nearestDays <= 3 && (
+        <div style={{
+          fontSize: 11, color: C.danger, textAlign: "center",
+          marginTop: 10, fontWeight: 600, letterSpacing: "0.04em",
+        }}>
+          시험 D-{nearestDays} · 정확한 표현으로 기억했나요?
+        </div>
+      )}
       {flipped && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginTop: 12 }}>
-          {[
-            { label: "모름",   grade: 0, variant: "danger"  },
-            { label: "어려움", grade: 1, variant: "default" },
-            { label: "알겠음", grade: 2, variant: "primary" },
-            { label: "쉬움",   grade: 3, variant: "success" },
-          ].map(({ label, grade, variant }) => (
-            <button
-              key={grade}
-              style={{ ...S.btn(variant), textAlign: "center", padding: "10px 4px" }}
-              onClick={() => reviewGrade(grade)}>
-              {label}
-            </button>
-          ))}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
+          <button style={S.btnAction("forgot")} onClick={() => reviewGrade(0)}>
+            <span style={{ fontSize: 20 }}>✕</span>
+            <span>잊었어요</span>
+          </button>
+          <button style={S.btnAction("mem")} onClick={() => reviewGrade(3)}>
+            <span style={{ fontSize: 20 }}>✓</span>
+            <span>기억해요</span>
+          </button>
         </div>
       )}
     </div>
@@ -1132,7 +1521,7 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
   const subjects = ["전체", ...Array.from(new Set((data.cards || []).map(c => c.subject).filter(Boolean)))];
 
   function getFiltered() {
-    let filtered = data.cards || [];
+    let filtered = (data.cards || []).filter(c => c.status !== "archived");
     if (subject !== "전체") filtered = filtered.filter(c => c.subject === subject);
     if (examScope !== "전체") {
       const exam = (data.exams || []).find(e => e.id === examScope);
@@ -1181,7 +1570,7 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
   if (filteredCards.length === 0) {
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary }}>플래시카드</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>플래시카드</h2>
         <div style={S.card}><div style={{ color: C.muted }}>카드가 없습니다. 카드 주입기로 추가하세요.</div></div>
       </div>
     );
@@ -1192,7 +1581,7 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
 
   return (
     <div>
-      <h2 style={{ margin: "0 0 16px", color: C.primary }}>플래시카드</h2>
+      <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>플래시카드</h2>
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <select value={subject} onChange={e => { setSubject(e.target.value); setCurrent(0); setFlipped(false); }} style={{ ...S.input, width: "auto" }}>
           {subjects.map(s => <option key={s} value={s}>{s}</option>)}
@@ -1209,22 +1598,54 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
       </div>
 
       <div
-        style={{ ...S.card, minHeight: 190, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", cursor: flipped ? "default" : "pointer" }}
+        style={{
+          background: C.cardFace,
+          borderRadius: 14,
+          border: `1px solid ${C.cardBorder}`,
+          boxShadow: "0 4px 24px rgba(0,0,0,0.45), 0 1px 4px rgba(0,0,0,0.3)",
+          padding: "32px 28px",
+          marginBottom: 12,
+          minHeight: 220,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          cursor: flipped ? "default" : "pointer",
+          transition: "box-shadow 0.15s",
+        }}
         onClick={() => { if (!flipped) setFlipped(true); }}
       >
-        <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{card.subject} · {card.chapter}</div>
-        <div style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.6 }}>{flipped ? card.back : card.front}</div>
+        <div style={{ fontSize: 11, color: "#9a8870", marginBottom: 12, fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+          {card.subject} · {card.chapter}
+        </div>
+        <div style={{
+          fontSize: flipped ? 16 : 20,
+          fontWeight: flipped ? 500 : 600,
+          lineHeight: 1.7,
+          color: C.cardText,
+          fontFamily: "'Playfair Display', Georgia, serif",
+          letterSpacing: "-0.01em",
+        }}>
+          {flipped ? card.back : card.front}
+        </div>
         <CardImage image_url={card.image_url} image_present={card.image_present} image_ref={card.image_ref} />
-        {!flipped && <div style={{ marginTop: 14, fontSize: 12, color: C.muted }}>탭하여 답 확인</div>}
+        {!flipped && (
+          <div style={{ marginTop: 18, fontSize: 11, color: "#b8a898", fontFamily: "'Noto Sans KR', sans-serif" }}>
+            탭하여 답 확인
+          </div>
+        )}
       </div>
-      <div style={{ fontSize: 12, color: C.muted, textAlign: "center", margin: "6px 0 10px" }}>{idx + 1} / {filteredCards.length}</div>
+      <div style={{ fontSize: 12, color: C.muted, textAlign: "center", margin: "6px 0 14px", fontFamily: "'Noto Sans KR', sans-serif" }}>
+        {idx + 1} / {filteredCards.length}
+      </div>
 
       {flipped && (
         <div style={{ display: "flex", gap: 8 }}>
-          <button style={{ ...S.btn("danger"), flex: 1 }} onClick={() => grade(0)}>다시</button>
-          <button style={{ ...S.btn("default"), flex: 1 }} onClick={() => grade(1)}>어려움</button>
-          <button style={{ ...S.btn(), flex: 1 }} onClick={() => grade(2)}>알겠음</button>
-          <button style={{ ...S.btn("success"), flex: 1 }} onClick={() => grade(3)}>쉬움</button>
+          <button style={{ ...S.btn("danger"), flex: 1, letterSpacing: "0.02em" }} onClick={() => grade(0)}>다시</button>
+          <button style={{ ...S.btn("default"), flex: 1, letterSpacing: "0.02em" }} onClick={() => grade(1)}>어려움</button>
+          <button style={{ ...S.btn("primary"), flex: 1, letterSpacing: "0.02em" }} onClick={() => grade(2)}>알겠음</button>
+          <button style={{ ...S.btn("success"), flex: 1, letterSpacing: "0.02em" }} onClick={() => grade(3)}>쉬움</button>
         </div>
       )}
     </div>
@@ -1236,7 +1657,7 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
 // ─────────────────────────────────────────
 function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
   const [phase, setPhase] = useState("setup");
-  const [config, setConfig] = useState({ mode: "question", subject: "전체", examScope: "전체", count: 10 });
+  const [config, setConfig] = useState({ mode: "question", subject: "전체", examScope: "전체", scopeType: "all", count: 10 });
   const [items, setItems] = useState([]);
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState(null);
@@ -1253,54 +1674,13 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
     ...(data.questions || []).map(q => q.subject),
   ].filter(Boolean)))];
 
-  function applyScope(pool, examScopeId) {
-    if (examScopeId === "전체") return pool;
-    const exam = (data.exams || []).find(e => e.id === examScopeId);
-    if (!exam) return pool;
-
-    const conceptIds = exam.included_concept_ids || [];
-    const excludedConceptIds = exam.excluded_concept_ids || [];
-    const topics = (exam.directScope && exam.directScope.includedTopics
-      ? exam.directScope.includedTopics : []).map(t => t.toLowerCase());
-
-    if (conceptIds.length === 0 && excludedConceptIds.length === 0 && topics.length === 0) return pool;
-
-    return pool.filter(item => {
-      const d = item.data;
-
-      // Excluded concepts always filtered out
-      if (excludedConceptIds.length > 0 && d.primary_concept_id &&
-          excludedConceptIds.includes(d.primary_concept_id)) return false;
-
-      // Priority 1: primary_concept_id match
-      if (conceptIds.length > 0) {
-        if (d.primary_concept_id && conceptIds.includes(d.primary_concept_id)) return true;
-      }
-
-      // Priority 2: topic/chapter/tag fallback
-      if (topics.length > 0) {
-        if (item.type === "card") {
-          const ch = (d.chapter || "").toLowerCase();
-          const tags = (d.tags || []).map(t => t.toLowerCase());
-          return topics.some(t => ch.includes(t) || tags.some(tg => tg.includes(t)));
-        }
-        const subj = (d.subject || "").toLowerCase();
-        const tags = (d.tags || []).map(t => t.toLowerCase());
-        return topics.some(t => subj.includes(t) || tags.some(tg => tg.includes(t)));
-      }
-
-      // concept filter active but no match
-      if (conceptIds.length > 0) return false;
-      return true;
-    });
-  }
-
   function buildPool(cfg) {
     // Phase 7A Task 6: foundation (search-only) concepts are excluded from quiz pool
     const foundationIds = getFoundationConceptIds(data.concepts);
 
     let cards = (data.cards || []).filter(c =>
-      !c.primary_concept_id || !foundationIds.has(c.primary_concept_id)
+      c.status !== "archived" &&
+      (!c.primary_concept_id || !foundationIds.has(c.primary_concept_id))
     );
     let qs = confirmedQ.filter(q =>
       !q.primary_concept_id || !foundationIds.has(q.primary_concept_id)
@@ -1313,7 +1693,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
     if (cfg.mode === "card") pool = cards.map(c => ({ type: "card", data: c }));
     else if (cfg.mode === "question") pool = qs.map(q => ({ type: "question", data: q }));
     else pool = [...cards.map(c => ({ type: "card", data: c })), ...qs.map(q => ({ type: "question", data: q }))];
-    return applyScope(pool, cfg.examScope);
+    return filterByExamScopeTyped(pool, data.exams || [], cfg.examScope, cfg.scopeType || "all");
   }
 
   function shuffle(arr) {
@@ -1380,7 +1760,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
   if (phase === "setup") {
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary }}>퀴즈 설정</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>퀴즈 설정</h2>
         <div style={S.card}>
           <div style={{ marginBottom: 14 }}>
             <label style={S.label}>퀴즈 모드</label>
@@ -1408,12 +1788,25 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
           {upcomingExams.length > 0 && (
             <div style={{ marginBottom: 14 }}>
               <label style={S.label}>시험 범위 필터</label>
-              <select value={config.examScope} onChange={e => setConfig(c => ({ ...c, examScope: e.target.value }))} style={S.input}>
+              <select value={config.examScope} onChange={e => setConfig(c => ({ ...c, examScope: e.target.value, scopeType: "all" }))} style={S.input}>
                 <option value="전체">전체 범위</option>
                 {upcomingExams.map(e => (
                   <option key={e.id} value={e.id}>{e.name} (D-{daysUntil(e.date)})</option>
                 ))}
               </select>
+              {config.examScope !== "전체" && (
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  {[["all", "전체"], ["direct", "직접 출제"], ["foundation", "배경지식"]].map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setConfig(c => ({ ...c, scopeType: key }))}
+                      style={{ ...S.btn(config.scopeType === key ? "primary" : "default"), fontSize: 12, padding: "6px 10px" }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1440,7 +1833,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
     const acc = sessionResults.length > 0 ? Math.round(correctCount / sessionResults.length * 100) : 0;
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary }}>퀴즈 결과</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>퀴즈 결과</h2>
         <div style={S.card}>
           <div style={{ fontSize: 40, fontWeight: 700, color: acc >= 70 ? C.success : acc >= 50 ? C.warning : C.danger, marginBottom: 6 }}>{acc}%</div>
           <div style={{ color: C.muted }}>{correctCount} / {sessionResults.length} 정답 · 리뷰 로그에 기록됨</div>
@@ -1448,8 +1841,24 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
         <div style={{ marginTop: 12 }}>
           {sessionResults.map((r, i) => (
             <div key={i} style={{ ...S.card, borderLeft: `3px solid ${r.correct ? C.success : C.danger}`, padding: 10, marginBottom: 6 }}>
-              <div style={{ fontSize: 11, color: r.correct ? C.success : C.danger, fontWeight: 600 }}>
-                {r.correct ? "✓ 정답" : "✗ 오답"} · {r.item.type === "card" ? "카드" : "기출"}
+              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, color: r.correct ? C.success : C.danger, fontWeight: 600 }}>
+                  {r.correct ? "✓ 정답" : "✗ 오답"}
+                </span>
+                <span style={S.badge(C.muted)}>
+                  {r.item.type === "card" ? "카드" : "기출"}
+                </span>
+                {r.item.data.source_type && (
+                  <span style={S.badge(
+                    r.item.data.source_type === "past_exam" ? C.warning :
+                    r.item.data.source_type === "slide" ? C.primary : C.muted
+                  )}>
+                    {r.item.data.source_type === "past_exam" ? "기출" :
+                     r.item.data.source_type === "slide" ? "슬라이드" :
+                     r.item.data.source_type === "note" ? "노트" :
+                     r.item.data.source_type === "textbook" ? "교과서" : "직접입력"}
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: 13, marginTop: 2 }}>
                 {r.item.type === "card" ? r.item.data.front : (r.item.data.parsed_question || r.item.data.raw_question || "").slice(0, 90)}
@@ -1483,7 +1892,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
             onClick={handleCardReveal}
           >
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{item.data.subject} · {item.data.chapter}</div>
-            <div style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.6 }}>{revealed ? item.data.back : item.data.front}</div>
+            <div style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.6, fontFamily: "'Playfair Display', Georgia, serif", letterSpacing: "-0.01em" }}>{revealed ? item.data.back : item.data.front}</div>
             <CardImage image_url={item.data.image_url} image_present={item.data.image_present} image_ref={item.data.image_ref} />
             {!revealed && <div style={{ marginTop: 14, fontSize: 12, color: C.muted }}>탭하여 답 확인</div>}
           </div>
@@ -1498,7 +1907,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
         <div>
           <div style={S.card}>
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{item.data.subject}</div>
-            <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.8, whiteSpace: "pre-wrap", marginBottom: 16 }}>
+            <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.8, whiteSpace: "pre-wrap", marginBottom: 16, fontFamily: "'Playfair Display', Georgia, serif", letterSpacing: "-0.01em" }}>
               {item.data.parsed_question || item.data.raw_question}
             </div>
             <CardImage image_url={item.data.image_url} image_present={item.data.image_present} image_ref={item.data.image_ref} />
@@ -1523,6 +1932,17 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
             })}
           </div>
 
+          {revealed && item.data.canonicalAnswer && (
+            <div style={{ ...S.card, borderLeft: `3px solid ${C.primary}`, marginTop: 0, padding: "8px 14px" }}>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>표준 정답</div>
+              <div style={{ fontSize: 13, color: C.text }}>{item.data.canonicalAnswer}</div>
+              {item.data.acceptedVariants && item.data.acceptedVariants.length > 0 && (
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+                  허용 표현: {item.data.acceptedVariants.join(" · ")}
+                </div>
+              )}
+            </div>
+          )}
           {revealed && item.data.explanations && (item.data.explanations.quick || item.data.explanations.professor) && (
             <div style={{ ...S.card, borderLeft: `3px solid ${C.primary}`, marginTop: 0 }}>
               <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>해설</div>
@@ -1598,7 +2018,7 @@ function PlanPage({ data, updateData, showToast }) {
       <div>
         <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
           <button style={S.btn("default")} onClick={() => setView("list")}>← 뒤로</button>
-          <h2 style={{ margin: 0, color: C.primary }}>시험 추가</h2>
+          <h2 style={{ margin: 0, color: C.primary , ...T.heading }}>시험 추가</h2>
         </div>
         <div style={S.card}>
           {[
@@ -1675,7 +2095,7 @@ function PlanPage({ data, updateData, showToast }) {
       <div>
         <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
           <button style={S.btn("default")} onClick={() => setView("list")}>← 뒤로</button>
-          <h2 style={{ margin: 0, color: C.primary }}>{exam.name}</h2>
+          <h2 style={{ margin: 0, color: C.primary , ...T.heading }}>{exam.name}</h2>
         </div>
 
         <div style={{ ...S.card, borderLeft: `3px solid ${borderColor}` }}>
@@ -1734,6 +2154,20 @@ function PlanPage({ data, updateData, showToast }) {
             </div>
           ))}
         </div>
+        <button
+          style={{ ...S.btn("default"), fontSize: 12, marginTop: 8 }}
+          onClick={() => {
+            const blob = new Blob([JSON.stringify(exam, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `exam-${exam.name}-${exam.date}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("시험 데이터 내보내기 완료");
+          }}>
+          📤 시험 데이터 내보내기
+        </button>
       </div>
     );
   }
@@ -1741,7 +2175,7 @@ function PlanPage({ data, updateData, showToast }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ margin: 0, color: C.primary }}>시험 플랜</h2>
+        <h2 style={{ margin: 0, color: C.primary , ...T.heading }}>시험 플랜</h2>
         <button style={S.btn("success")} onClick={() => setView("create")}>+ 시험 추가</button>
       </div>
       {sorted.length === 0 ? (
@@ -1841,7 +2275,7 @@ function StatsPage({ data }) {
 
   return (
     <div>
-      <h2 style={{ margin: "0 0 16px", color: C.primary }}>학습 통계</h2>
+      <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>학습 통계</h2>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
         <div style={{ ...S.card, marginBottom: 0 }}>
@@ -1949,7 +2383,18 @@ function StatsPage({ data }) {
 function ManagePage({ data, updateData, showToast }) {
   const [tab, setTab] = useState("cards");
   const [search, setSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [profForm, setProfForm] = useState(null);
+  const [pdfForm, setPdfForm] = useState({
+    subjectKo: "해부학",
+    exam_unit: "",
+    source_type: "past_exam",
+    source_detail: "",
+    geminiApiKey: localStorage.getItem("medstudy:gemini-api-key") || import.meta.env.VITE_GEMINI_API_KEY || "",
+    file: null,
+  });
+  const [pdfStatus, setPdfStatus] = useState({ phase: "idle", progress: 0 });
+  const [pdfResult, setPdfResult] = useState(null);
 
   const PRESETS = {
     "past-exam-heavy": { pastExam: 5, slides: 3, textbook: 1, notes: 2 },
@@ -1994,7 +2439,7 @@ function ManagePage({ data, updateData, showToast }) {
           parsed_question: q.question || q.parsed_question || "",
           options: q.options || [], canonicalAnswer,
           acceptedVariants: q.acceptedVariants || [],
-          explanations: q.explanations || { quick: q.explanation || "" },
+          explanations: q.explanations || { quick: q.explanation || "", detailed: "", source: "", professor: null },
           status: "confirmed", confidence: "medium",
           confirmationSource: "legacy",
           confirmed_source: "official",        // Phase 7A: legacy exam data = official
@@ -2016,9 +2461,146 @@ function ManagePage({ data, updateData, showToast }) {
     } catch(e) { showToast("실패: " + e.message, "error"); }
   }
 
-  const filteredCards = (data.cards || []).filter(c =>
-    !search || (c.front || "").toLowerCase().includes(search.toLowerCase()) || (c.subject || "").toLowerCase().includes(search.toLowerCase())
-  );
+  async function processPdf() {
+    try {
+      if (!pdfForm.file) { showToast("PDF 파일을 선택하세요.", "error"); return; }
+      if (!pdfForm.exam_unit.trim()) { showToast("시험 단위를 입력하세요.", "error"); return; }
+      if (!pdfForm.geminiApiKey.trim()) { showToast("Gemini API 키를 입력하세요.", "error"); return; }
+      localStorage.setItem("medstudy:gemini-api-key", pdfForm.geminiApiKey.trim());
+      const subjectSlug = SUBJECT_SLUG_MAP[pdfForm.subjectKo] || "general";
+      const ingestionBatchId = `pdf_${Date.now().toString(36)}`;
+
+      setPdfStatus({ phase: "텍스트 추출 중...", progress: 15 });
+      const formData = new FormData();
+      formData.append("file", pdfForm.file);
+      formData.append("subject", subjectSlug);
+      formData.append("exam_unit", pdfForm.exam_unit.trim());
+      formData.append("source_type", pdfForm.source_type);
+      if (pdfForm.source_detail.trim()) formData.append("source_detail", pdfForm.source_detail.trim());
+
+      const pdfRes = await fetch("/api/process-pdf", { method: "POST", body: formData });
+      const pdfJson = await pdfRes.json();
+      if (!pdfRes.ok) throw new Error(pdfJson.error || "PDF 처리 실패");
+      const imageMapping = pdfJson.imageMapping || {};
+      if (pdfJson.imageCount > 0 && Object.keys(imageMapping).length === 0) {
+        console.warn("[MedStudy] imageMapping이 서버 응답에 없습니다. 이미지 연결 불가.");
+      }
+
+      setPdfStatus({ phase: "문제 구조화 중...", progress: 55 });
+      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(pdfForm.geminiApiKey.trim())}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          generationConfig: {
+            maxOutputTokens: 65536,
+            temperature: 0.1,
+          },
+          contents: [{
+            parts: [{ text: `${PDF_PARSE_PROMPT}\n\n=== RAW EXAM TEXT START ===\n${pdfJson.text}\n=== RAW EXAM TEXT END ===` }],
+          }],
+        }),
+      });
+      const geminiJson = await geminiRes.json();
+      if (!geminiRes.ok) {
+        const msg = geminiJson?.error?.message || `HTTP ${geminiRes.status}`;
+        throw new Error(`Gemini API 오류: ${msg}`);
+      }
+      const rawText = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+      const parsedItems = safeJsonArrayFromText(rawText);
+
+      setPdfStatus({ phase: "저장 중...", progress: 80 });
+      const questions = data.questions || [];
+      const cards = data.cards || [];
+      const normalize = s => (s || "").replace(/\s+/g, " ").trim();
+      const existingQ = new Set(questions.map(q => normalize(q.raw_question)));
+      const existingC = new Set(cards.map(c => normalize(c.front)));
+      const newQuestions = [];
+      const newCards = [];
+      let unresolvedImageRefs = 0;
+
+      parsedItems.forEach(item => {
+        const rawQuestion = item.raw_question || "";
+        const normalizedRawQuestion = normalize(rawQuestion);
+        const imageRef = item.image_ref || null;
+        const mappedImage = imageRef ? imageMapping[imageRef] : null;
+        if (imageRef && !mappedImage?.url) unresolvedImageRefs += 1;
+
+        if ((item.type || "").toLowerCase() === "objective") {
+          if (!normalizedRawQuestion || existingQ.has(normalizedRawQuestion)) return;
+          const canonicalAnswer = item.canonicalAnswer ?? null;
+          newQuestions.push({
+            id: uid(),
+            raw_question: rawQuestion,
+            parsed_question: rawQuestion,
+            options: Array.isArray(item.options) ? item.options : [],
+            canonicalAnswer,
+            status: normalizeConfidence(item.confidence) === "none" ? "unverified" : "confirmed",
+            confidence: normalizeConfidence(item.confidence),
+            confirmed_source: "ai_user",
+            question_intent: "definition",
+            occurrence_key: [subjectSlug, pdfForm.exam_unit.trim(), pdfForm.source_type].join("|"),
+            source_signature: ["", "definition", (canonicalAnswer || "").slice(0, 40)].join("||"),
+            explanations: { quick: "", professor: null, textbook: null, extra: null },
+            image_present: !!item.image_present,
+            image_ref: imageRef,
+            image_url: mappedImage?.url || null,
+            primary_concept_id: null,
+            tags: [pdfForm.source_type, subjectSlug],
+            source_type: pdfForm.source_type,
+            subject: pdfForm.subjectKo,
+            ingestion_batch_id: ingestionBatchId,
+            createdAt: new Date().toISOString(),
+          });
+          existingQ.add(normalizedRawQuestion);
+          return;
+        }
+
+        if ((item.type || "").toLowerCase() === "subjective") {
+          const front = normalizedRawQuestion;
+          if (!front || existingC.has(front)) return;
+          newCards.push({
+            id: uid(),
+            front,
+            back: item.canonicalAnswer || "",
+            subject: pdfForm.subjectKo,
+            chapter: "",
+            templateType: "general",
+            tier: "active",
+            source_type: pdfForm.source_type,
+            image_present: !!item.image_present,
+            image_ref: imageRef,
+            image_url: mappedImage?.url || null,
+            tags: [pdfForm.source_type, subjectSlug],
+            ingestion_batch_id: ingestionBatchId,
+            createdAt: new Date().toISOString(),
+          });
+          existingC.add(front);
+        }
+      });
+
+      if (newQuestions.length > 0) updateData("questions", [...questions, ...newQuestions]);
+      if (newCards.length > 0) updateData("cards", [...cards, ...newCards]);
+
+      setPdfStatus({ phase: "완료", progress: 100 });
+      setPdfResult({
+        questions: newQuestions.length,
+        cards: newCards.length,
+        imageCount: pdfJson.imageCount || 0,
+        unresolvedImageRefs,
+      });
+      showToast(`처리 완료: 문제 ${newQuestions.length}개 / 카드 ${newCards.length}개`);
+    } catch (e) {
+      setPdfStatus({ phase: "오류", progress: 0 });
+      showToast(`PDF 처리 실패: ${e.message}`, "error");
+    }
+  }
+
+  const filteredCards = (data.cards || []).filter(c => {
+    if (!showArchived && c.status === "archived") return false;
+    if (!search) return true;
+    return (c.front || "").toLowerCase().includes(search.toLowerCase()) ||
+           (c.subject || "").toLowerCase().includes(search.toLowerCase());
+  });
   const filteredQ = (data.questions || []).filter(q =>
     !search || (q.parsed_question || q.raw_question || "").toLowerCase().includes(search.toLowerCase())
   );
@@ -2027,16 +2609,17 @@ function ManagePage({ data, updateData, showToast }) {
     q.needs_review || q.status === "conflict" || q.status === "unstable_parse"
   );
   const tabs = [
-    ["cards", `카드 (${(data.cards || []).length})`],
-    ["questions", `문제 (${(data.questions || []).length})`],
-    ["review_queue", `검토 대기${reviewQueueQ.length > 0 ? ` (${reviewQueueQ.length})` : ""}`],
-    ["professors", `교수 (${(data.professors || []).length})`],
+    ["cards", "카드"],
+    ["questions", "문제"],
+    ["review_queue", "검토대기"],
+    ["professors", "교수"],
     ["migrate", "마이그레이션"],
+    ["pdf_process", "PDF 처리"],
   ];
 
   return (
     <div>
-      <h2 style={{ margin: "0 0 16px", color: C.primary }}>관리</h2>
+      <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>관리</h2>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
         {tabs.map(([t, label]) => (
@@ -2052,6 +2635,14 @@ function ManagePage({ data, updateData, showToast }) {
 
       {tab === "cards" && (
         <div>
+          {(data.cards || []).some(c => c.status === "archived") && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+              <button style={{ ...S.btn("default"), fontSize: 11, padding: "4px 10px" }}
+                onClick={() => setShowArchived(v => !v)}>
+                {showArchived ? "보관 숨기기" : `보관 카드 보기 (${(data.cards || []).filter(c => c.status === "archived").length})`}
+              </button>
+            </div>
+          )}
           {filteredCards.length === 0 ? (
             <div style={S.card}><div style={{ color: C.muted }}>카드 없음</div></div>
           ) : filteredCards.map(c => {
@@ -2061,13 +2652,28 @@ function ManagePage({ data, updateData, showToast }) {
                 <div style={{ flex: 1, marginRight: 8 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 2 }}>
                     <span style={{ fontSize: 11, color: C.muted }}>{c.subject} · {c.chapter} · {c.tier || "active"}</span>
+                    <span style={S.badge(C.warning)}>{SOURCE_TYPE_LABELS[c.source_type || "manual"] || (c.source_type || "manual")}</span>
                     {concept && <span style={S.badge(C.primary)}>{concept.primaryLabel || c.primary_concept_id}</span>}
                     {!concept && c.primary_concept_id && <span style={S.badge(C.warning)}>{c.primary_concept_id}</span>}
                   </div>
                   <div style={{ fontSize: 14, marginTop: 2 }}>{c.front}</div>
                   <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{c.back}</div>
                 </div>
-                <button style={S.btn("danger")} onClick={() => { updateData("cards", (data.cards || []).filter(x => x.id !== c.id)); showToast("삭제됨"); }}>삭제</button>
+                {c.status === "archived" ? (
+                  <button style={{ ...S.btn("success"), fontSize: 11 }} onClick={() => {
+                    updateData("cards", (data.cards || []).map(x =>
+                      x.id === c.id ? { ...x, status: undefined, archivedAt: undefined } : x
+                    ));
+                    showToast("복원됨");
+                  }}>복원</button>
+                ) : (
+                  <button style={{ ...S.btn("danger"), fontSize: 11 }} onClick={() => {
+                    updateData("cards", (data.cards || []).map(x =>
+                      x.id === c.id ? { ...x, status: "archived", archivedAt: new Date().toISOString() } : x
+                    ));
+                    showToast("보관됨");
+                  }}>보관</button>
+                )}
               </div>
             );
           })}
@@ -2091,6 +2697,9 @@ function ManagePage({ data, updateData, showToast }) {
                     <div style={{ display: "flex", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
                       <span style={S.badge(sc)}>{q.status || "unverified"}</span>
                       <span style={S.badge(C.muted)}>{q.subject || "미분류"}</span>
+                      {q.confirmed_source === "official" && <span style={S.badge(C.success)}>공식</span>}
+                      {q.confirmed_source === "ai_user" && <span style={S.badge(C.warning)}>AI+사용자</span>}
+                      {q.confirmed_source === "user" && <span style={S.badge(C.muted)}>사용자</span>}
                       {q.duplicate_level && q.duplicate_level !== "distinct_same_concept" && (
                         <span style={S.badge(C.warning)}>{q.duplicate_level}</span>
                       )}
@@ -2116,6 +2725,73 @@ function ManagePage({ data, updateData, showToast }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {tab === "pdf_process" && (
+        <div style={S.card}>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>PDF 자동 처리 파이프라인</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <label style={S.label}>과목</label>
+              <input
+                style={S.input}
+                list="subject-list-pdf"
+                value={pdfForm.subjectKo}
+                placeholder="예: 해부학, 내과학, 직접 입력 가능"
+                onChange={e => setPdfForm(f => ({ ...f, subjectKo: e.target.value }))}
+              />
+              <datalist id="subject-list-pdf">
+                {SUBJECT_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+              </datalist>
+            </div>
+            <div>
+              <label style={S.label}>출처 타입</label>
+              <select style={S.input} value={pdfForm.source_type} onChange={e => setPdfForm(f => ({ ...f, source_type: e.target.value }))}>
+                <option value="past_exam">기출 (past_exam)</option>
+                <option value="slide">슬라이드 (slide)</option>
+                <option value="note">필기 (note)</option>
+                <option value="textbook">교과서 (textbook)</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <label style={S.label}>시험 단위</label>
+              <input style={S.input} value={pdfForm.exam_unit} placeholder="예: 2024_1_mid" onChange={e => setPdfForm(f => ({ ...f, exam_unit: e.target.value }))} />
+            </div>
+            <div>
+              <label style={S.label}>출처 상세 (선택)</label>
+              <input style={S.input} value={pdfForm.source_detail} placeholder="예: 2022, lecture3" onChange={e => setPdfForm(f => ({ ...f, source_detail: e.target.value }))} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <label style={S.label}>Gemini API Key</label>
+            <input style={S.input} type="password" value={pdfForm.geminiApiKey} placeholder="aistudio.google.com에서 발급" onChange={e => setPdfForm(f => ({ ...f, geminiApiKey: e.target.value }))} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={S.label}>PDF 파일</label>
+            <input type="file" accept="application/pdf" onChange={e => setPdfForm(f => ({ ...f, file: e.target.files?.[0] || null }))} />
+          </div>
+          <button style={S.btn("success")} onClick={processPdf}>처리 시작</button>
+
+          {pdfStatus.phase !== "idle" && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>{pdfStatus.phase}</div>
+              <div style={{ width: "100%", height: 8, borderRadius: 999, background: "#2b3b55", overflow: "hidden" }}>
+                <div style={{ width: `${pdfStatus.progress}%`, height: "100%", background: C.primary }} />
+              </div>
+            </div>
+          )}
+
+          {pdfResult && (
+            <div style={{ marginTop: 12, fontSize: 13 }}>
+              <div>문제 {pdfResult.questions}개 저장됨 / 카드 {pdfResult.cards}개 저장됨 / 이미지 {pdfResult.imageCount}개 업로드됨</div>
+              {pdfResult.unresolvedImageRefs > 0 && (
+                <div style={{ color: C.warning, marginTop: 4 }}>⚠️ 이미지 매핑 실패: {pdfResult.unresolvedImageRefs}건</div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -2239,7 +2915,99 @@ function ManagePage({ data, updateData, showToast }) {
               <span>시험: {(data.exams || []).length}개</span>
               <span>리뷰 로그: {(data.reviewLog || []).length}건</span>
             </div>
+            <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
+              <button
+                style={{ ...S.btn("primary"), fontSize: 12 }}
+                onClick={async () => {
+                  const [cards, questions, concepts, exams, professors, srs, reviewLog] =
+                    await Promise.all([
+                      sGet(SK.cards), sGet(SK.questions), sGet(SK.concepts),
+                      sGet(SK.exams), sGet(SK.professors), sGet(SK.srs), sGet(SK.reviewLog),
+                    ]);
+                  const exportData = {
+                    exportedAt: new Date().toISOString(),
+                    version: "medstudy-v1",
+                    cards: cards || [],
+                    questions: questions || [],
+                    concepts: concepts || [],
+                    exams: exams || [],
+                    professors: professors || [],
+                    srs: srs || {},
+                    reviewLog: reviewLog || [],
+                  };
+                  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `medstudy-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  showToast("백업 파일 다운로드됨");
+                }}>
+                📦 전체 데이터 백업 (JSON)
+              </button>
+            </div>
           </div>
+          {/* 배치별 롤백 */}
+          {(() => {
+            const allItems = [...(data.cards || []), ...(data.questions || [])];
+            const batchMap = {};
+            allItems.forEach(item => {
+              const bid = item.ingestion_batch_id;
+              if (!bid) return;
+              if (!batchMap[bid]) batchMap[bid] = { cards: 0, questions: 0, createdAt: item.createdAt };
+              if (item.front !== undefined) batchMap[bid].cards++;
+              else batchMap[bid].questions++;
+            });
+            const batches = Object.entries(batchMap)
+              .sort((a, b) => new Date(b[1].createdAt) - new Date(a[1].createdAt));
+            if (batches.length === 0) return null;
+            return (
+              <div style={{ ...S.card, marginBottom: 12 }}>
+                <div style={{ fontWeight: 600, marginBottom: 10 }}>📦 주입 배치 기록</div>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>
+                  파일 단위로 롤백(보관처리)할 수 있습니다.
+                </div>
+                {batches.slice(0, 10).map(([bid, info]) => (
+                  <div key={bid} style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "8px 0", borderBottom: `1px solid ${C.border}`,
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>
+                        {bid.startsWith("pdf_") ? "📄 PDF" :
+                         bid.startsWith("json_bulk_") ? "📋 JSON 일괄" :
+                         bid.startsWith("migrate_") || bid.startsWith("injector_migrate_") ? "🔄 마이그레이션" : "✏️ 수동 주입"}
+                      </div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                        카드 {info.cards}개 · 문제 {info.questions}개 · {(info.createdAt || "").slice(0, 10)}
+                      </div>
+                      <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{bid}</div>
+                    </div>
+                    <button
+                      style={{ ...S.btn("danger"), fontSize: 11, padding: "5px 10px", flexShrink: 0, marginLeft: 12 }}
+                      onClick={() => {
+                        if (!window.confirm(`배치 "${bid}"
+카드 ${info.cards}개, 문제 ${info.questions}개를 보관 처리합니다.`)) return;
+                        updateData("cards", (data.cards || []).map(c =>
+                          c.ingestion_batch_id === bid
+                            ? { ...c, status: "archived", archivedAt: new Date().toISOString() }
+                            : c
+                        ));
+                        updateData("questions", (data.questions || []).map(q =>
+                          q.ingestion_batch_id === bid
+                            ? { ...q, status: "archived_reference", needs_review: false }
+                            : q
+                        ));
+                        showToast(`롤백 완료: 카드 ${info.cards}개, 문제 ${info.questions}개 보관됨`);
+                      }}>
+                      롤백
+                    </button>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
           {data.hasLegacy && (
             <div style={S.card}>
               <div style={{ fontWeight: 600, marginBottom: 6, color: C.warning }}>⚠️ 구 custom-quiz 데이터 발견</div>
@@ -2445,6 +3213,8 @@ function rebuildConceptLinks(concept, cards, questions) {
 // ─────────────────────────────────────────
 function ConceptPage({ data, updateData, showToast }) {
   const [view, setView] = useState("list");          // list | detail | create | edit
+  const svgRef = useRef(null);
+  const [mapSubject, setMapSubject] = useState("전체");
   const [selected, setSelected] = useState(null);    // concept id
   const [form, setForm] = useState(null);
   const [search, setSearch] = useState("");
@@ -2459,12 +3229,87 @@ function ConceptPage({ data, updateData, showToast }) {
 
   const filtered = concepts.filter(c => {
     if (!search) return true;
+    if (search === "__stub__") return !!(c.stub && c.needs_review);
     const q = search.toLowerCase();
     return (c.id || "").toLowerCase().includes(q)
       || (c.primaryLabel || "").toLowerCase().includes(q)
       || (c.secondaryLabel || "").toLowerCase().includes(q)
       || (c.aliases || []).some(a => a.toLowerCase().includes(q));
   });
+
+  const mindmapSubjects = ["전체", ...new Set(concepts.map(c => c.subject).filter(Boolean))];
+  const mindmapFiltered = mapSubject === "전체" ? concepts : concepts.filter(c => c.subject === mapSubject);
+  const mindmapNodeIds = new Set(mindmapFiltered.map(c => c.id));
+  const mindmapLinks = [];
+  mindmapFiltered.forEach(c => {
+    (c.linkedConceptIds || []).forEach(tid => {
+      if (mindmapNodeIds.has(tid)) mindmapLinks.push({ source: c.id, target: tid });
+    });
+  });
+
+  const masteryColor = (c) => {
+    const srsEntries = (data.cards || [])
+      .filter(card => card.primary_concept_id === c.id)
+      .map(card => data.srs[card.id]?.state);
+    if (srsEntries.includes("mastered")) return C.success;
+    if (srsEntries.includes("reviewing")) return C.primary;
+    if (srsEntries.includes("learning")) return C.warning;
+    return C.border;
+  };
+
+  useEffect(() => {
+    if (view !== "mindmap") return;
+    if (!svgRef.current || mindmapFiltered.length === 0) return;
+    const el = svgRef.current;
+    d3.select(el).selectAll("*").remove();
+    const W = el.clientWidth || 360;
+    const H = 480;
+    const svg = d3.select(el).attr("width", W).attr("height", H);
+    const g = svg.append("g");
+
+    svg.call(d3.zoom().scaleExtent([0.3, 3]).on("zoom", e => g.attr("transform", e.transform)));
+
+    const nodes = mindmapFiltered.map(c => ({ ...c }));
+    const linkData = mindmapLinks.map(l => ({ ...l }));
+
+    const sim = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(linkData).id(d => d.id).distance(80))
+      .force("charge", d3.forceManyBody().strength(-120))
+      .force("center", d3.forceCenter(W / 2, H / 2))
+      .force("collision", d3.forceCollide(28));
+
+    const link = g.append("g").selectAll("line")
+      .data(linkData).join("line")
+      .attr("stroke", C.border).attr("stroke-opacity", 0.5).attr("stroke-width", 1);
+
+    const node = g.append("g").selectAll("g")
+      .data(nodes).join("g")
+      .call(d3.drag()
+        .on("start", (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("drag",  (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on("end",   (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+      )
+      .on("click", (e, d) => { setSelected(d.id); setView("detail"); });
+
+    node.append("circle")
+      .attr("r", d => 8 + Math.min((d.importance || 1) * 2, 16))
+      .attr("fill", d => masteryColor(d))
+      .attr("stroke", C.bg).attr("stroke-width", 2);
+
+    node.append("text")
+      .text(d => d.primaryLabel || d.id)
+      .attr("text-anchor", "middle").attr("dy", d => 12 + Math.min((d.importance || 1) * 2, 16))
+      .attr("font-size", 10).attr("fill", C.text)
+      .style("pointer-events", "none");
+
+    sim.on("tick", () => {
+      link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+      node.attr("transform", d => `translate(${d.x},${d.y})`);
+    });
+
+    return () => sim.stop();
+  }, [view, mindmapFiltered.length, mapSubject]);
 
   function openCreate() {
     setForm(makeBlankConcept());
@@ -2496,6 +3341,15 @@ function ConceptPage({ data, updateData, showToast }) {
       topics,
     });
     const rebuilt = rebuildConceptLinks(built, cards, questions);
+    // concept importance = avg of connected cards' source weight
+    if (rebuilt.linkedCardIds && rebuilt.linkedCardIds.length > 0) {
+      const linkedCards = cards.filter(c => rebuilt.linkedCardIds.includes(c.id));
+      const weights = { past_exam: 5, slide: 3, note: 2, textbook: 1, manual: 1 };
+      const avgImportance = linkedCards.reduce((sum, c) => {
+        return sum + (weights[c.source_type] || 1);
+      }, 0) / linkedCards.length;
+      rebuilt.importance = parseFloat(avgImportance.toFixed(2));
+    }
     let newConcepts;
     if (view === "edit") {
       newConcepts = concepts.map(c => c.id === rebuilt.id ? rebuilt : c);
@@ -2526,21 +3380,83 @@ function ConceptPage({ data, updateData, showToast }) {
     setForm(f => ({ ...f, linkedConceptIds: (f.linkedConceptIds || []).filter(x => x !== targetId) }));
   }
 
+  if (view === "mindmap") {
+    return (
+      <div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+          <button style={S.btn("default")} onClick={() => setView("list")}>← 목록</button>
+          <h2 style={{ margin: 0, color: C.primary, fontSize: 18, fontWeight: 700 }}>마인드맵</h2>
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          {mindmapSubjects.map(s => (
+            <button key={s}
+              onClick={() => setMapSubject(s)}
+              style={{ ...S.btn(mapSubject === s ? "primary" : "default"), fontSize: 11, padding: "4px 10px" }}>
+              {s}
+            </button>
+          ))}
+        </div>
+        {mindmapFiltered.length === 0 ? (
+          <div style={S.card}><div style={{ color: C.muted }}>개념을 추가하면 마인드맵이 생성됩니다.</div></div>
+        ) : (
+          <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+            <svg ref={svgRef} style={{ width: "100%", display: "block", background: C.bg, borderRadius: 10 }} />
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 12, marginTop: 10, padding: "0 4px" }}>
+          {[[C.success,"마스터"],[C.primary,"복습중"],[C.warning,"학습중"],[C.border,"신규"]].map(([col,label]) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: col }} />
+              <span style={{ fontSize: 10, color: C.muted }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   // ── List view ──
   if (view === "list") {
     return (
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2 style={{ margin: 0, color: C.primary }}>개념 허브</h2>
-          <button style={S.btn("success")} onClick={openCreate}>+ 개념 추가</button>
+          <h2 style={{ margin: 0, color: C.primary , ...T.heading }}>개념 허브</h2>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              style={{ ...S.btn(view === "mindmap" ? "primary" : "default"), fontSize: 12 }}
+              onClick={() => setView("mindmap")}>
+              🗺 마인드맵
+            </button>
+            <button style={S.btn("success")} onClick={openCreate}>+ 개념 추가</button>
+          </div>
         </div>
 
         <input style={{ ...S.input, marginBottom: 12 }} placeholder="ID / 라벨 / 별칭 검색..." value={search} onChange={e => setSearch(e.target.value)} />
 
-        <div style={{ display: "flex", gap: 10, marginBottom: 14, fontSize: 12, color: C.muted }}>
-          <span>총 {concepts.length}개</span>
-          <span>Active: {concepts.filter(c => c.tier === "active").length}</span>
-          <span>Passive: {concepts.filter(c => c.tier === "passive").length}</span>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: C.muted }}>총 {concepts.length}개</span>
+          <span style={{ fontSize: 12, color: C.muted }}>·</span>
+          <span style={{ fontSize: 12, color: C.muted }}>Active: {concepts.filter(c => c.tier === "active").length}</span>
+          {concepts.filter(c => c.stub && c.needs_review).length > 0 && (
+            <button
+              onClick={() => setSearch("__stub__")}
+              style={{
+                padding: "3px 10px", borderRadius: 6,
+                border: `1px solid ${C.warning}`,
+                background: search === "__stub__" ? C.warning + "22" : "transparent",
+                color: C.warning, fontSize: 11, fontWeight: 700, cursor: "pointer",
+              }}>
+              검토 필요 {concepts.filter(c => c.stub && c.needs_review).length}
+            </button>
+          )}
+          {search === "__stub__" && (
+            <button
+              onClick={() => setSearch("")}
+              style={{ padding: "3px 8px", borderRadius: 6, border: `1px solid ${C.border}`,
+                background: "transparent", color: C.muted, fontSize: 11, cursor: "pointer" }}>
+              전체 보기
+            </button>
+          )}
         </div>
 
         {filtered.length === 0 && (
@@ -2738,7 +3654,7 @@ function ConceptPage({ data, updateData, showToast }) {
       <div>
         <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center" }}>
           <button style={S.btn("default")} onClick={() => { setView("list"); setForm(null); }}>← 취소</button>
-          <h2 style={{ margin: 0, color: C.primary }}>{view === "create" ? "개념 추가" : "개념 수정"}</h2>
+          <h2 style={{ margin: 0, color: C.primary , ...T.heading }}>{view === "create" ? "개념 추가" : "개념 수정"}</h2>
         </div>
 
         <div style={S.card}>
@@ -2766,9 +3682,19 @@ function ConceptPage({ data, updateData, showToast }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
             <div>
               <label style={S.label}>과목</label>
-              <select style={S.input} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}>
-                {["", "해부학","생리학","생화학","약리학","병리학","미생물학","기타"].map(s => <option key={s} value={s}>{s || "선택 안 함"}</option>)}
-              </select>
+              <>
+                <input
+                  style={S.input}
+                  list="subject-list-manage"
+                  value={form.subject}
+                  placeholder="예: 해부학 (직접 입력 가능)"
+                  onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
+                />
+                <datalist id="subject-list-manage">
+                  <option value="" />
+                  {SUBJECT_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+                </datalist>
+              </>
             </div>
             <div>
               <label style={S.label}>Tier</label>
@@ -2857,7 +3783,10 @@ function DecisionTrainingPage({ data, logReview, showToast, refreshClusters }) {
   const foundationIds = getFoundationConceptIds(data.concepts);
   const cardById = {};
   (data.cards || [])
-    .filter(c => !c.primary_concept_id || !foundationIds.has(c.primary_concept_id))
+    .filter(c =>
+      c.status !== "archived" &&
+      (!c.primary_concept_id || !foundationIds.has(c.primary_concept_id))
+    )
     .forEach(c => { cardById[c.id] = c; });
 
   function buildSession(cid) {
@@ -2911,7 +3840,7 @@ function DecisionTrainingPage({ data, logReview, showToast, refreshClusters }) {
     const cluster = clusters.find(c => c.id === clusterId);
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary }}>감별 훈련 완료</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>감별 훈련 완료</h2>
         <div style={S.card}>
           <div style={{ fontSize: 36, fontWeight: 700, color: acc >= 70 ? C.success : C.warning, marginBottom: 4 }}>{acc}%</div>
           <div style={{ color: C.muted }}>{correctCount}/{results.length} 정답 · {cluster ? cluster.label : ""}</div>
@@ -2946,7 +3875,7 @@ function DecisionTrainingPage({ data, logReview, showToast, refreshClusters }) {
     if (clusters.length === 0) {
       return (
         <div>
-          <h2 style={{ margin: "0 0 16px", color: C.primary }}>감별 훈련</h2>
+          <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>감별 훈련</h2>
           <div style={S.card}>
             <div style={{ color: C.muted, fontSize: 14 }}>감별 훈련 클러스터가 없습니다.</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>복습·플래시카드를 진행하면 오답 패턴에서 자동으로 클러스터가 생성됩니다.</div>
@@ -2956,7 +3885,7 @@ function DecisionTrainingPage({ data, logReview, showToast, refreshClusters }) {
     }
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary }}>감별 훈련</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>감별 훈련</h2>
         <div style={{ fontSize: 13, color: C.muted, marginBottom: 14 }}>
           오답이 반복된 개념 그룹에서 유사 선지를 구별하는 훈련입니다.
         </div>
@@ -3066,6 +3995,7 @@ function CompressionPage({ data, getUpcomingExams }) {
   const [expanded, setExpanded] = useState({});
   const [scanned, setScanned] = useState({});
   const [examScope, setExamScope] = useState("전체");
+  const [scopeType, setScopeType] = useState("all");
 
   const upcomingExams = getUpcomingExams();
 
@@ -3073,28 +4003,11 @@ function CompressionPage({ data, getUpcomingExams }) {
     // Phase 7A Task 6: strip foundation (search-only) concept cards from compression pool
     const foundationIds = getFoundationConceptIds(data.concepts);
     let cards = (data.cards || []).filter(c =>
-      !c.primary_concept_id || !foundationIds.has(c.primary_concept_id)
+      c.status !== "archived" &&
+      (!c.primary_concept_id || !foundationIds.has(c.primary_concept_id))
     );
 
-    if (examScope !== "전체") {
-      const exam = (data.exams || []).find(e => e.id === examScope);
-      if (exam) {
-        const conceptIds = exam.included_concept_ids || [];
-        const excludedIds = exam.excluded_concept_ids || [];
-        const topics = ((exam.directScope && exam.directScope.includedTopics) || []).map(t => t.toLowerCase());
-        cards = cards.filter(c => {
-          if (excludedIds.length > 0 && c.primary_concept_id && excludedIds.includes(c.primary_concept_id)) return false;
-          if (conceptIds.length > 0 && c.primary_concept_id && conceptIds.includes(c.primary_concept_id)) return true;
-          if (topics.length > 0) {
-            const ch = (c.chapter || "").toLowerCase();
-            const tags = (c.tags || []).map(t => t.toLowerCase());
-            return topics.some(t => ch.includes(t) || tags.some(tag => tag.includes(t)));
-          }
-          if (conceptIds.length > 0) return false;
-          return true;
-        });
-      }
-    }
+    cards = filterByExamScopeTyped(cards, data.exams || [], examScope, scopeType);
 
     const dangerIds = getDangerCardIds(data.reviewLog);
     const dangerCards = cards.filter(c => dangerIds.has(c.id));
@@ -3145,13 +4058,44 @@ function CompressionPage({ data, getUpcomingExams }) {
 
       {upcomingExams.length > 0 && (
         <div style={{ marginBottom: 14 }}>
-          <select value={examScope} onChange={e => { setExamScope(e.target.value); setScanned({}); }}
-            style={{ ...S.input, width: "auto" }}>
-            <option value="전체">전체 범위</option>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button
+              onClick={() => { setExamScope("전체"); setScopeType("all"); setScanned({}); }}
+              style={{
+                ...S.btn(examScope === "전체" ? "primary" : "default"),
+                fontSize: 12, padding: "6px 12px",
+              }}>
+              전체 범위
+            </button>
             {upcomingExams.map(e => (
-              <option key={e.id} value={e.id}>{e.name} (D-{daysUntil(e.date)})</option>
+              <button
+                key={e.id}
+                onClick={() => { setExamScope(e.id); setScopeType("all"); setScanned({}); }}
+                style={{
+                  ...S.btn(examScope === e.id ? "primary" : "default"),
+                  fontSize: 12, padding: "6px 12px",
+                }}>
+                {e.name} D-{daysUntil(e.date)}
+              </button>
             ))}
-          </select>
+          </div>
+          {examScope !== "전체" && (
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              {[["all", "전체"], ["direct", "직접 출제"], ["foundation", "배경지식"]].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => { setScopeType(key); setScanned({}); }}
+                  style={{
+                    padding: "4px 10px", borderRadius: 6, border: `1px solid ${scopeType === key ? C.primary : C.border}`,
+                    background: scopeType === key ? C.primary + "22" : "transparent",
+                    color: scopeType === key ? C.primary : C.muted,
+                    fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -3164,7 +4108,11 @@ function CompressionPage({ data, getUpcomingExams }) {
       {pool.map(({ card, isDanger, isCluster, importance }) => {
         const isExpanded = !!expanded[card.id];
         const isScanned  = !!scanned[card.id];
-        const accentColor = isDanger ? C.danger : isCluster ? C.warning : C.primary;
+        const accentColor = isDanger ? C.danger
+          : isCluster ? C.warning
+          : importance >= 7 ? C.danger
+          : importance >= 4 ? C.warning
+          : C.primary;
         return (
           <div key={card.id} style={{
             ...S.card,
@@ -3180,6 +4128,11 @@ function CompressionPage({ data, getUpcomingExams }) {
                   <span style={{ fontSize: 11, color: C.muted }}>{card.subject}{card.chapter ? " · " + card.chapter : ""}</span>
                   {isDanger  && <span style={S.badge(C.danger)}>위험</span>}
                   {isCluster && !isDanger && <span style={S.badge(C.warning)}>혼동</span>}
+                  {importance >= 5 && (
+                    <span style={S.badge(C.primary)}>
+                      기출×{Math.min(Math.floor(importance / 2.5), 9)}
+                    </span>
+                  )}
                 </div>
                 {/* Front */}
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 5, lineHeight: 1.5 }}>{card.front}</div>
