@@ -1,2 +1,1 @@
 pymupdf
-requests
