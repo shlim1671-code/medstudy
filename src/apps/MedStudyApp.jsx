@@ -3350,9 +3350,31 @@ ${textChunk}
       parsedItems.forEach(item => {
         const rawQuestion = item.raw_question || "";
         const normalizedRawQuestion = normalize(rawQuestion);
-        const imageRef = item.image_ref || null;
-        const mappedImage = imageRef ? imageMapping[imageRef] : null;
-        if (imageRef && !mappedImage?.url) unresolvedImageRefs += 1;
+        // Normalize: Gemini might return array like ["p007_i01", "p007_i02"]
+        let rawImageRef = item.image_ref;
+        if (Array.isArray(rawImageRef)) {
+          rawImageRef = rawImageRef.join(", ");
+        }
+        // Handle single ref or comma-separated multi-ref from Gemini
+        let imageRef = rawImageRef || null;
+        let mappedImage = null;
+        if (imageRef) {
+          // Try direct lookup first
+          mappedImage = imageMapping[imageRef];
+          if (!mappedImage) {
+            // Split by comma/space and try each ref
+            const refs = imageRef.split(/[,\s]+/).map(r => r.trim()).filter(Boolean);
+            for (const ref of refs) {
+              const found = imageMapping[ref];
+              if (found?.url) {
+                mappedImage = found;
+                imageRef = ref; // Use the first successfully matched ref
+                break;
+              }
+            }
+          }
+          if (!mappedImage?.url) unresolvedImageRefs += 1;
+        }
 
         if ((item.type || "").toLowerCase() === "objective") {
           if (!normalizedRawQuestion || existingQ.has(normalizedRawQuestion)) return;

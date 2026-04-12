@@ -123,29 +123,48 @@ class handler(BaseHTTPRequestHandler):
                     ref_by_xref[xref] = ref
                     image_count += 1
 
-                # Preserve approximate layout order by traversing text/image blocks
+                # Build a list of (y_position, content) tuples for proper ordering
+                elements = []
+
+                # Add text blocks with their y-position
                 blocks = page.get_text("dict").get("blocks", [])
-                parts = []
-                used_refs = set()
                 for block in blocks:
-                    b_type = block.get("type")
-                    if b_type == 0:
+                    if block.get("type") == 0:  # text block
+                        y_pos = block.get("bbox", [0, 0, 0, 0])[1]
                         for line in block.get("lines", []):
                             spans = line.get("spans", [])
                             text_line = "".join(span.get("text", "") for span in spans).strip()
                             if text_line:
-                                parts.append(text_line)
-                    elif b_type == 1:
-                        xref = block.get("xref")
-                        ref = ref_by_xref.get(xref)
-                        if ref:
-                            parts.append(f"[IMAGE {ref}]")
-                            used_refs.add(ref)
+                                line_y = line.get("bbox", [0, y_pos, 0, 0])[1]
+                                elements.append((line_y, text_line))
 
-                # If block xref mapping is unavailable, append remaining markers at page end
+                # Add image markers with their y-position from get_images + bbox
+                used_refs = set()
+                for img in page_images:
+                    xref = img[0]
+                    ref = ref_by_xref.get(xref)
+                    if not ref:
+                        continue
+                    # Try to find image position via page.get_image_rects
+                    try:
+                        rects = page.get_image_rects(xref)
+                        if rects and len(rects) > 0:
+                            y_pos = rects[0].y0
+                        else:
+                            y_pos = float("inf")  # fallback: end of page
+                    except Exception:
+                        y_pos = float("inf")
+                    elements.append((y_pos, f"[IMAGE {ref}]"))
+                    used_refs.add(ref)
+
+                # Fallback for any images not placed
                 for ref in ref_by_xref.values():
                     if ref not in used_refs:
-                        parts.append(f"[IMAGE {ref}]")
+                        elements.append((float("inf"), f"[IMAGE {ref}]"))
+
+                # Sort by y-position to maintain document order
+                elements.sort(key=lambda x: x[0])
+                parts = [content for _, content in elements]
 
                 page_text = "\n".join(parts).strip()
                 page_texts.append(f"[PAGE {p_idx}]\n{page_text}" if page_text else f"[PAGE {p_idx}]")
