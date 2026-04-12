@@ -473,13 +473,13 @@ const THEMES = {
     paperText: "#1C1C1E", paperMuted: "#8E8E93",
   },
   dark: {
-    bg: "#111111", surface: "#1A1A1A", surface2: "#222222",
-    border: "#2A2A2A", text: "#E8E8EC", muted: "#6B7280",
+    bg: "#111111", surface: "#1C1C1E", surface2: "#2C2C2E",
+    border: "#3A3A3C", text: "#E8E8EC", muted: "#6B7280",
     primary: "#0EA5E9", primaryDim: "rgba(14,165,233,0.15)", primaryText: "#38BDF8",
     success: "#4ADE80", successDim: "rgba(74,222,128,0.12)",
     danger: "#F87171", dangerDim: "rgba(248,113,113,0.12)",
     warning: "#FBBF24",
-    cardFace: "#1A1A1A", cardText: "#E8E8EC", cardBorder: "#2A2A2A",
+    cardFace: "#2C2C2E", cardText: "#E8E8EC", cardBorder: "#3A3A3C",
     paperText: "#E8E8EC", paperMuted: "#6B7280",
   },
 };
@@ -1016,9 +1016,9 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
       {/* 3열 스탯 그리드 */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 4 }}>
         {[
-          ["복습 대기", dueCards.length, C.warning],
-          ["연속 학습", streak + "일", C.primary],
-          ["마스터", stateCounts.mastered, C.success],
+          ["복습 대기", dueCards.length, C.text],
+          ["연속 학습", streak + "일", C.text],
+          ["마스터", stateCounts.mastered, C.text],
         ].map(([label, val, col]) => (
           <div key={label} style={{
             background: C.surface,
@@ -1082,7 +1082,7 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
           {/* Big number */}
           <div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-              <span style={{ fontSize: 52, fontWeight: 800, color: hasDue ? C.warning : C.success, lineHeight: 1 }}>
+              <span style={{ fontSize: 52, fontWeight: 800, color: C.text, lineHeight: 1 }}>
                 {dueCards.length}
               </span>
               <span style={{ fontSize: 15, color: C.muted, fontWeight: 500 }}>장 대기</span>
@@ -1091,9 +1091,9 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
             {totalCards > 0 && (
               <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
                 {[
-                  ["학습중", stateCounts.learning,  C.warning],
-                  ["복습중", stateCounts.reviewing, C.primary],
-                  ["완료",   stateCounts.mastered,  C.success],
+                  ["학습중", stateCounts.learning,  C.muted],
+                  ["복습중", stateCounts.reviewing, C.muted],
+                  ["완료",   stateCounts.mastered,  C.muted],
                   ["신규",   stateCounts.new,        C.muted  ],
                 ].map(([label, count, col]) => count > 0 && (
                   <div key={label} style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
