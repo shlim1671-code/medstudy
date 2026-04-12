@@ -10,6 +10,13 @@ const SK = {
   exams: "medstudy:exams",
 };
 
+const SUBJECT_SUGGESTIONS = [
+  "해부학", "생리학", "생화학", "약리학", "병리학",
+  "미생물학", "면역학", "예방의학", "내과학", "외과학",
+  "산부인과학", "소아과학", "정신건강의학", "신경과학",
+  "영상의학", "마취과학", "기타",
+];
+
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
 // ─────────────────────────────────────────
@@ -38,6 +45,22 @@ const INTENT_LEGACY_MAP = {
   structure: "location_or_structure",
 };
 
+const SOURCE_TYPE_OPTIONS = [
+  { value: "past_exam", label: "기출 문제" },
+  { value: "slide", label: "강의 슬라이드" },
+  { value: "note", label: "필기 노트" },
+  { value: "textbook", label: "교과서" },
+  { value: "manual", label: "직접 입력" },
+];
+
+const SOURCE_TYPE_WEIGHTS = {
+  past_exam: 5,
+  slide: 3,
+  note: 2,
+  textbook: 1,
+  manual: 1,
+};
+
 function normalizeIntent(raw) {
   if (!raw) return "definition";
   if (VALID_INTENTS.includes(raw)) return raw;
@@ -48,15 +71,150 @@ function normalizeIntent(raw) {
 const INGESTION_BATCH_ID = uid();
 
 const C = {
-  bg: "#141c28", surface: "#1e2d42", border: "#304060",
-  text: "#e4edf8", muted: "#92a4be",
-  primary: "#6aafe6", success: "#5dc87e", danger: "#e07070", warning: "#cdb94a",
+  bg:         "#161210",
+  surface:    "#1e1c18",
+  surface2:   "#252219",
+  border:     "#2a2720",
+  text:       "#f0ebe0",
+  muted:      "#6b6256",
+  primary:    "#a07850",
+  success:    "#6aac5c",
+  danger:     "#d4745a",
+  warning:    "#c4963a",
+  paper:      "#f8f3ea",
+  paperText:  "#2c2520",
+  paperMuted: "#8a7f6e",
+  dangerBg:   "#3d1f1a",
+  successBg:  "#1a2e1c",
+  primaryBg:  "#2a2218",
 };
+const FONT_HEADING = "'Playfair Display', Georgia, serif";
+const FONT_BODY    = "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif";
+
 const S = {
-  card: { background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, padding: 16, marginBottom: 12 },
-  btn: (v = "primary") => ({ padding: "9px 18px", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 13, background: v === "primary" ? C.primary : v === "success" ? C.success : v === "danger" ? C.danger : "#263350", color: (v === "default") ? C.text : "#111a28" }),
-  input: { background: "#263350", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 14, width: "100%", boxSizing: "border-box" },
-  label: { fontSize: 12, color: C.muted, marginBottom: 4, display: "block", fontWeight: 500 },
+  card: {
+    background:   C.surface,
+    borderRadius: 14,
+    border:       `1px solid ${C.border}`,
+    padding:      "18px 20px",
+    marginBottom: 10,
+  },
+  flashcard: {
+    background:   C.paper,
+    borderRadius: 20,
+    border:       "none",
+    padding:      "32px 28px 24px",
+    marginBottom: 14,
+  },
+  cardInset: {
+    background:   C.surface2,
+    borderRadius: 10,
+    border:       `1px solid ${C.border}`,
+    padding:      "10px 14px",
+    marginBottom: 8,
+  },
+  btn: (v = "primary") => ({
+    padding:      "11px 20px",
+    borderRadius: 10,
+    border:       "none",
+    cursor:       "pointer",
+    fontWeight:   700,
+    fontSize:     13,
+    fontFamily:   FONT_BODY,
+    letterSpacing:"0.04em",
+    transition:   "filter 0.12s, transform 0.06s",
+    background:
+      v === "primary" ? C.primary :
+      v === "success" ? C.successBg :
+      v === "danger"  ? C.dangerBg :
+      C.surface2,
+    color:
+      v === "primary" ? "#1a1108" :
+      v === "success" ? C.success :
+      v === "danger"  ? C.danger  :
+      C.text,
+  }),
+  btnAction: (v = "forgot") => ({
+    flex:          1,
+    padding:       "16px 8px",
+    borderRadius:  14,
+    border:        "none",
+    cursor:        "pointer",
+    fontFamily:    FONT_BODY,
+    fontWeight:    700,
+    fontSize:      12,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    display:       "flex",
+    flexDirection: "column",
+    alignItems:    "center",
+    gap:           6,
+    background:    v === "forgot" ? C.dangerBg  : C.successBg,
+    color:         v === "forgot" ? C.danger     : C.success,
+  }),
+  input: {
+    background:  C.surface2,
+    border:      `1px solid ${C.border}`,
+    borderRadius: 10,
+    padding:     "9px 14px",
+    color:       C.text,
+    fontSize:    14,
+    fontFamily:  FONT_BODY,
+    width:       "100%",
+    boxSizing:   "border-box",
+    outline:     "none",
+  },
+  label: {
+    fontSize:      11,
+    color:         C.muted,
+    marginBottom:  4,
+    display:       "block",
+    fontWeight:    700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    fontFamily:    FONT_BODY,
+  },
+  badge: (col = C.primary) => {
+    const bg =
+      col === C.danger  ? C.dangerBg  :
+      col === C.success ? C.successBg :
+      col === C.primary ? C.primaryBg :
+      col + "22";
+    return {
+      background:    bg,
+      color:         col,
+      padding:       "3px 9px",
+      borderRadius:  6,
+      fontSize:      10,
+      fontWeight:    700,
+      letterSpacing: "0.08em",
+      textTransform: "uppercase",
+      display:       "inline-block",
+      fontFamily:    FONT_BODY,
+    };
+  },
+  badgePaper: (col = "#b84a2e", bg = "#f5e0da") => ({
+    background:    bg,
+    color:         col,
+    padding:       "3px 9px",
+    borderRadius:  6,
+    fontSize:      10,
+    fontWeight:    700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    display:       "inline-block",
+    fontFamily:    FONT_BODY,
+  }),
+  sectionLabel: {
+    fontSize:      10,
+    fontWeight:    700,
+    color:         C.muted,
+    textTransform: "uppercase",
+    letterSpacing: "0.1em",
+    marginBottom:  8,
+    display:       "block",
+    fontFamily:    FONT_BODY,
+  },
 };
 
 const TEMPLATE_FIELDS = {
@@ -75,6 +233,13 @@ export default function CardInjectorApp() {
   const [professors, setProfessors] = useState([]);
 
   useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Noto+Sans+KR:wght@400;500;700&display=swap";
+    document.head.appendChild(link);
+  }, []);
+
+  useEffect(() => {
     async function load() {
       const [e, p] = await Promise.all([sGet(SK.exams), sGet(SK.professors)]);
       setExams(e || []);
@@ -88,23 +253,23 @@ export default function CardInjectorApp() {
     setTimeout(() => setToast(null), 3000);
   }
 
-  const navTabs = [["card", "카드 주입"], ["question", "문제 주입"], ["migrate", "마이그레이션"]];
+  const navTabs = [["card", "카드 주입"], ["question", "문제 주입"], ["json_bulk", "JSON 일괄입력"], ["image_link", "이미지 URL 연결"], ["migrate", "마이그레이션"]];
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "system-ui, sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: FONT_BODY }}>
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "12px 20px" }}>
-        <div style={{ fontWeight: 700, fontSize: 16, color: C.primary }}>카드/문제 주입기</div>
+        <div style={{ fontFamily: FONT_HEADING, fontWeight: 700, fontSize: 17, color: C.text }}>카드/문제 주입기</div>
       </div>
 
       {toast && (
-        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, padding: "10px 16px", borderRadius: 8, background: toast.type === "error" ? C.danger : C.success, color: "#1a1f2e", fontWeight: 600, fontSize: 14 }}>
+        <div style={{ position: "fixed", top: 60, right: 20, zIndex: 999, padding: "10px 16px", borderRadius: 10, background: toast.type === "error" ? C.dangerBg : C.successBg, color: toast.type === "error" ? C.danger : C.success, fontWeight: 700, fontSize: 13, border: `1px solid ${toast.type === "error" ? C.danger : C.success}`, fontFamily: FONT_BODY }}>
           {toast.msg}
         </div>
       )}
 
-      <div style={{ display: "flex", background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", overflowX: "auto", background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 4px" }}>
         {navTabs.map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} style={{ padding: "10px 18px", background: "none", border: "none", cursor: "pointer", color: tab === t ? C.primary : C.muted, fontWeight: tab === t ? 700 : 400, borderBottom: `2px solid ${tab === t ? C.primary : "transparent"}`, fontSize: 13 }}>
+          <button key={t} onClick={() => setTab(t)} style={{ padding: "10px 18px", background: "none", border: "none", cursor: "pointer", color: tab === t ? C.primary : C.text, fontWeight: tab === t ? 700 : 500, borderBottom: `2px solid ${tab === t ? C.primary : "transparent"}`, fontSize: 13 }}>
             {label}
           </button>
         ))}
@@ -113,7 +278,202 @@ export default function CardInjectorApp() {
       <div style={{ maxWidth: 700, margin: "0 auto", padding: 20 }}>
         {tab === "card" && <CardInjector showToast={showToast} exams={exams} professors={professors} />}
         {tab === "question" && <QuestionInjector showToast={showToast} exams={exams} professors={professors} />}
+        {tab === "json_bulk" && <JsonBulkPanel showToast={showToast} />}
+        {tab === "image_link" && <ImageLinkPanel showToast={showToast} />}
         {tab === "migrate" && <MigratePanel showToast={showToast} exams={exams} professors={professors} />}
+      </div>
+    </div>
+  );
+}
+
+function toSubjectSlug(subject) {
+  const map = {
+    해부학: "anatomy",
+    생리학: "physiology",
+    생화학: "biochemistry",
+    약리학: "pharmacology",
+    병리학: "pathology",
+    미생물학: "microbiology",
+    기타: "general",
+  };
+  return map[subject] || "general";
+}
+
+function toConfidence(value) {
+  const raw = (value || "").toString().toUpperCase();
+  if (raw === "HIGH") return "high";
+  if (raw === "MEDIUM") return "medium";
+  return "none";
+}
+
+function JsonBulkPanel({ showToast }) {
+  const [jsonText, setJsonText] = useState("");
+  const [subject, setSubject] = useState("해부학");
+  const [sourceType, setSourceType] = useState("manual");
+  const [preview, setPreview] = useState(null);
+
+  function buildPreview() {
+    try {
+      const parsed = JSON.parse(jsonText || "[]");
+      if (!Array.isArray(parsed)) throw new Error("배열(JSON Array) 형식이어야 합니다.");
+      const qCount = parsed.filter(x => x.raw_question || x.options).length;
+      const cCount = parsed.filter(x => x.front || (x.type === "subjective")).length;
+      setPreview({ total: parsed.length, questions: qCount, cards: cCount });
+    } catch (e) {
+      showToast(`미리보기 실패: ${e.message}`, "error");
+    }
+  }
+
+  async function saveBulk() {
+    try {
+      const parsed = JSON.parse(jsonText || "[]");
+      if (!Array.isArray(parsed)) throw new Error("배열(JSON Array) 형식이어야 합니다.");
+      const batchId = `json_bulk_${Date.now().toString(36)}`;
+      const subjectSlug = toSubjectSlug(subject);
+      const questions = (await sGet(SK.questions)) || [];
+      const cards = (await sGet(SK.cards)) || [];
+      const existingQ = new Set(questions.map(q => (q.raw_question || "").trim()));
+      const existingC = new Set(cards.map(c => (c.front || "").trim()));
+      const newQuestions = [];
+      const newCards = [];
+
+      for (const item of parsed) {
+        const hasQuestionShape = !!(item.raw_question || item.options || item.type === "objective");
+        if (hasQuestionShape) {
+          const rawQuestion = item.raw_question || "";
+          if (!rawQuestion.trim() || existingQ.has(rawQuestion.trim())) continue;
+          const canonicalAnswer = item.canonicalAnswer ?? null;
+          const confidence = toConfidence(item.confidence);
+          newQuestions.push({
+            id: uid(),
+            raw_question: rawQuestion,
+            parsed_question: rawQuestion,
+            options: Array.isArray(item.options) ? item.options : [],
+            canonicalAnswer,
+            type: "objective",
+            status: confidence === "none" ? "unverified" : "confirmed",
+            confidence,
+            confirmed_source: "ai_user",
+            question_intent: "definition",
+            occurrence_key: [subjectSlug, "manual_bulk", sourceType].join("|"),
+            source_signature: ["", "definition", (canonicalAnswer || "").slice(0, 40)].join("||"),
+            explanations: { quick: "", professor: null, textbook: null, extra: null },
+            image_present: !!item.image_present,
+            image_ref: item.image_ref || null,
+            image_url: item.image_url || null,
+            primary_concept_id: null,
+            tags: [sourceType, subjectSlug],
+            source_type: sourceType,
+            subject,
+            ingestion_batch_id: batchId,
+            createdAt: new Date().toISOString(),
+          });
+          existingQ.add(rawQuestion.trim());
+          continue;
+        }
+
+        const front = item.front || item.raw_question || "";
+        if (!front.trim() || existingC.has(front.trim())) continue;
+        newCards.push({
+          id: uid(),
+          front,
+          back: item.back || item.canonicalAnswer || "",
+          subject: item.subject || subject,
+          chapter: "",
+          templateType: "general",
+          tier: "active",
+          source_type: item.source_type || sourceType,
+          image_present: !!item.image_present,
+          image_ref: item.image_ref || null,
+          image_url: item.image_url || null,
+          tags: [item.source_type || sourceType, subjectSlug],
+          ingestion_batch_id: batchId,
+          createdAt: new Date().toISOString(),
+        });
+        existingC.add(front.trim());
+      }
+
+      if (newQuestions.length > 0) await sSet(SK.questions, [...questions, ...newQuestions]);
+      if (newCards.length > 0) await sSet(SK.cards, [...cards, ...newCards]);
+      showToast(`저장 완료: 문제 ${newQuestions.length}개 / 카드 ${newCards.length}개`);
+    } catch (e) {
+      showToast(`저장 실패: ${e.message}`, "error");
+    }
+  }
+
+  return (
+    <div>
+      <h3 style={{ margin: "0 0 16px", color: C.primary }}>JSON 일괄입력</h3>
+      <div style={S.card}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={S.label}>과목 override</label>
+            <input
+              style={S.input}
+              list="subject-list-bulk"
+              value={subject}
+              placeholder="예: 해부학, 내과학, 직접 입력 가능"
+              onChange={e => setSubject(e.target.value)}
+            />
+            <datalist id="subject-list-bulk">
+              {SUBJECT_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+            </datalist>
+          </div>
+          <div>
+            <label style={S.label}>source_type override</label>
+            <select style={S.input} value={sourceType} onChange={e => setSourceType(e.target.value)}>
+              {SOURCE_TYPE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label} ({opt.value})</option>)}
+            </select>
+          </div>
+        </div>
+        <label style={S.label}>JSON 입력</label>
+        <textarea style={{ ...S.input, height: 220, resize: "vertical", marginBottom: 12 }} value={jsonText} onChange={e => setJsonText(e.target.value)} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={S.btn("default")} onClick={buildPreview}>미리보기</button>
+          <button style={S.btn("success")} onClick={saveBulk}>저장</button>
+        </div>
+        {preview && <div style={{ marginTop: 10, fontSize: 12, color: C.muted }}>총 {preview.total}건 · 문제 {preview.questions}건 · 카드 {preview.cards}건</div>}
+      </div>
+    </div>
+  );
+}
+
+function ImageLinkPanel({ showToast }) {
+  const [mappingText, setMappingText] = useState("{\n  \"p003_i01\": \"https://...\"\n}");
+
+  async function connectImages() {
+    try {
+      const mapping = JSON.parse(mappingText || "{}");
+      const questions = (await sGet(SK.questions)) || [];
+      const cards = (await sGet(SK.cards)) || [];
+      let linked = 0;
+      const newQ = questions.map(q => {
+        const url = q.image_ref && mapping[q.image_ref];
+        if (!url) return q;
+        linked += 1;
+        return { ...q, image_url: url, image_present: true };
+      });
+      const newC = cards.map(c => {
+        const url = c.image_ref && mapping[c.image_ref];
+        if (!url) return c;
+        linked += 1;
+        return { ...c, image_url: url, image_present: true };
+      });
+      await sSet(SK.questions, newQ);
+      await sSet(SK.cards, newC);
+      showToast(`${linked}개 항목에 image_url 연결됨`);
+    } catch (e) {
+      showToast(`연결 실패: ${e.message}`, "error");
+    }
+  }
+
+  return (
+    <div>
+      <h3 style={{ margin: "0 0 16px", color: C.primary }}>이미지 URL 연결</h3>
+      <div style={S.card}>
+        <label style={S.label}>image_ref → image_url 매핑 JSON</label>
+        <textarea style={{ ...S.input, height: 180, resize: "vertical", marginBottom: 12 }} value={mappingText} onChange={e => setMappingText(e.target.value)} />
+        <button style={S.btn("success")} onClick={connectImages}>연결 실행</button>
       </div>
     </div>
   );
@@ -124,8 +484,9 @@ export default function CardInjectorApp() {
 // ─────────────────────────────────────────
 function CardInjector({ showToast, exams, professors }) {
   const blank = {
-    subject: "해부학", chapter: "", front: "", back: "",
+    subject: "", chapter: "", front: "", back: "",
     templateType: "anatomy", conceptId: "", tier: "active",
+    source_type: "manual",
     tags: "", sourceId: "", examId: "", professorId: "",
     templateFields: {},
     image_url: "", image_ref: "",
@@ -134,6 +495,7 @@ function CardInjector({ showToast, exams, professors }) {
   const fields = TEMPLATE_FIELDS[form.templateType] || [];
 
   async function save() {
+    if (!form.subject.trim()) { showToast("과목명을 입력하세요.", "error"); return; }
     if (!form.front || !form.back) { showToast("앞면과 뒷면은 필수입니다.", "error"); return; }
     const cards = (await sGet(SK.cards)) || [];
     let concepts = (await sGet(SK.concepts)) || [];
@@ -176,6 +538,7 @@ function CardInjector({ showToast, exams, professors }) {
       back: form.back,
       templateType: form.templateType,
       templateFields: form.templateFields,
+      source_type: form.source_type || "manual",
       tags: form.tags.split(",").map(t => t.trim()).filter(Boolean),
       tier: form.tier,
       sourceIds: form.sourceId ? [form.sourceId] : [],
@@ -184,7 +547,7 @@ function CardInjector({ showToast, exams, professors }) {
       image_url: form.image_url.trim() || null,
       image_ref: form.image_ref.trim() || null,
       image_present: !!(form.image_url.trim()),
-      importance: 0,
+      importance: SOURCE_TYPE_WEIGHTS[form.source_type] || 1,
       state: "new",
       ingestion_batch_id: INGESTION_BATCH_ID,  // Phase 7A: batch traceability
       createdAt: new Date().toISOString(),
@@ -202,9 +565,18 @@ function CardInjector({ showToast, exams, professors }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <div>
             <label style={S.label}>과목</label>
-            <select style={S.input} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}>
-              {["해부학","생리학","생화학","약리학","병리학","미생물학","기타"].map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <>
+              <input
+                style={S.input}
+                list="subject-list-card"
+                value={form.subject}
+                placeholder="예: 해부학, 내과학, 직접 입력 가능"
+                onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
+              />
+              <datalist id="subject-list-card">
+                {SUBJECT_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+              </datalist>
+            </>
           </div>
           <div>
             <label style={S.label}>템플릿</label>
@@ -256,12 +628,19 @@ function CardInjector({ showToast, exams, professors }) {
         </div>
 
         <div style={{ marginBottom: 12 }}>
+          <label style={S.label}>출처 유형</label>
+          <select style={S.input} value={form.source_type} onChange={e => setForm(f => ({ ...f, source_type: e.target.value }))}>
+            {SOURCE_TYPE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label} ({opt.value})</option>)}
+          </select>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
           <label style={S.label}>태그 (쉼표 구분)</label>
           <input style={S.input} value={form.tags} placeholder="예: 기출, 중요, 신경" onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} />
         </div>
 
         {/* Image fields */}
-        <div style={{ background: "#252d3d", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+        <div style={{ background: C.surface2, borderRadius: 8, padding: 12, marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: C.primary, fontWeight: 600, marginBottom: 8 }}>🖼️ 이미지 (선택)</div>
           <div style={{ marginBottom: 8 }}>
             <label style={S.label}>이미지 URL (Supabase public URL 붙여넣기)</label>
@@ -278,7 +657,7 @@ function CardInjector({ showToast, exams, professors }) {
 
         {/* Exam/Professor Connection */}
         {(exams.length > 0 || professors.length > 0) && (
-          <div style={{ background: "#252d3d", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+          <div style={{ background: C.surface2, borderRadius: 8, padding: 12, marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: C.warning, fontWeight: 600, marginBottom: 8 }}>📎 시험·교수 연결</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {exams.length > 0 && (
@@ -314,11 +693,13 @@ function CardInjector({ showToast, exams, professors }) {
 // ─────────────────────────────────────────
 function QuestionInjector({ showToast, exams, professors }) {
   const blank = {
-    subject: "해부학", type: "mcq", rawQuestion: "", parsedQuestion: "",
+    subject: "", type: "mcq", rawQuestion: "", parsedQuestion: "",
     options: [{ text: "", correct: false }, { text: "", correct: false }, { text: "", correct: false }, { text: "", correct: false }, { text: "", correct: false }],
     explanation: "", status: "confirmed", examId: "", professorId: "",
     examYear: "", isOriginalExam: true, tags: "",
     questionIntent: "definition", conceptId: "",
+    source_type: "past_exam",
+    sourceExplanation: "",
     image_url: "", image_ref: "",
   };
   const [form, setForm] = useState(blank);
@@ -332,6 +713,7 @@ function QuestionInjector({ showToast, exams, professors }) {
   }
 
   async function save() {
+    if (!form.subject.trim()) { showToast("과목명을 입력하세요.", "error"); return; }
     if (!form.rawQuestion) { showToast("원본 문제는 필수입니다.", "error"); return; }
     if (form.type === "mcq") {
       const hasCorrect = form.options.some(o => o.correct);
@@ -429,7 +811,7 @@ function QuestionInjector({ showToast, exams, professors }) {
       options: form.type === "mcq" ? form.options.filter(o => o.text.trim()) : [],
       canonicalAnswer,
       acceptedVariants: [],
-      explanations: { quick: form.explanation, professor: null, textbook: null, extra: null },
+      explanations: { quick: form.explanation, source: form.sourceExplanation || "", professor: null, textbook: null, extra: null },
       status: form.status, confidence: form.status === "confirmed" ? "high" : "low",
       confirmationSource: form.status === "confirmed" ? "manual" : "unverified",
       // Phase 7A: confirmed_source metadata (official | user | ai_user)
@@ -443,8 +825,10 @@ function QuestionInjector({ showToast, exams, professors }) {
       examYear: form.examYear,
       professorId: form.professorId || null,
       examId: form.examId || null,
+      source_type: form.source_type || "past_exam",
       tags: form.tags.split(",").map(t => t.trim()).filter(Boolean),
-      importance: 0, difficulty: 0,
+      importance: SOURCE_TYPE_WEIGHTS[form.source_type || "past_exam"] || 1,
+      difficulty: 0,
       parseConfidence: "high", parseStatus: "completed",
       // Phase 5.5 / 7A fields
       question_intent: normalizedIntent,
@@ -477,9 +861,18 @@ function QuestionInjector({ showToast, exams, professors }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <div>
             <label style={S.label}>과목</label>
-            <select style={S.input} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}>
-              {["해부학","생리학","생화학","약리학","병리학","미생물학","기타"].map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <>
+              <input
+                style={S.input}
+                list="subject-list-question"
+                value={form.subject}
+                placeholder="예: 해부학, 내과학, 직접 입력 가능"
+                onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
+              />
+              <datalist id="subject-list-question">
+                {SUBJECT_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+              </datalist>
+            </>
           </div>
           <div>
             <label style={S.label}>문제 유형</label>
@@ -515,8 +908,12 @@ function QuestionInjector({ showToast, exams, professors }) {
         )}
 
         <div style={{ marginBottom: 12 }}>
-          <label style={S.label}>해설</label>
+          <label style={S.label}>해설 (quick)</label>
           <textarea style={{ ...S.input, height: 60, resize: "vertical" }} value={form.explanation} onChange={e => setForm(f => ({ ...f, explanation: e.target.value }))} />
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={S.label}>원문 보존 (source explanation)</label>
+          <textarea style={{ ...S.input, height: 60, resize: "vertical" }} value={form.sourceExplanation || ""} placeholder="원문 그대로 보존 (선택)" onChange={e => setForm(f => ({ ...f, sourceExplanation: e.target.value }))} />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
@@ -551,12 +948,18 @@ function QuestionInjector({ showToast, exams, professors }) {
         </div>
 
         <div style={{ marginBottom: 12 }}>
+          <label style={S.label}>출처 유형</label>
+          <select style={S.input} value={form.source_type} onChange={e => setForm(f => ({ ...f, source_type: e.target.value }))}>
+            {SOURCE_TYPE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label} ({opt.value})</option>)}
+          </select>
+        </div>
+        <div style={{ marginBottom: 12 }}>
           <label style={S.label}>태그 (쉼표 구분)</label>
           <input style={S.input} value={form.tags} placeholder="예: 기출, 신경, 중요" onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} />
         </div>
 
         {/* Image fields */}
-        <div style={{ background: "#252d3d", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+        <div style={{ background: C.surface2, borderRadius: 8, padding: 12, marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: C.primary, fontWeight: 600, marginBottom: 8 }}>🖼️ 이미지 (선택)</div>
           <div style={{ marginBottom: 8 }}>
             <label style={S.label}>이미지 URL (Supabase public URL 붙여넣기)</label>
@@ -572,7 +975,7 @@ function QuestionInjector({ showToast, exams, professors }) {
         </div>
 
         {(exams.length > 0 || professors.length > 0) && (
-          <div style={{ background: "#252d3d", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+          <div style={{ background: C.surface2, borderRadius: 8, padding: 12, marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: C.warning, fontWeight: 600, marginBottom: 8 }}>📎 시험·교수 연결</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {exams.length > 0 && (
