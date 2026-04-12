@@ -1,36 +1,48 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import MedStudyApp from "./apps/MedStudyApp";
 import CardInjectorApp from "./apps/CardInjectorApp";
 
 const shell = {
   bg: "#0f1724",
-  panel: "#1e2d42",
-  border: "#304060",
   text: "#e4edf8",
-  muted: "#92a4be",
-  primary: "#6aafe6",
 };
 
+function resolveViewFromLocation() {
+  if (typeof window === "undefined") return "study";
+
+  const { pathname, search, hash } = window.location;
+  const queryMode = new URLSearchParams(search).get("mode");
+  const hashMode = hash.startsWith("#?") ? new URLSearchParams(hash.slice(2)).get("mode") : null;
+  const hashPath = hash.startsWith("#/") ? hash.slice(1) : hash;
+
+  if (
+    pathname === "/injector" ||
+    pathname.endsWith("/injector") ||
+    queryMode === "injector" ||
+    hashMode === "injector" ||
+    hashPath === "/injector"
+  ) {
+    return "injector";
+  }
+
+  return "study";
+}
+
 export default function App() {
-  const [view, setView] = useState("study");
+  const [view, setView] = useState(resolveViewFromLocation);
+
+  useEffect(() => {
+    const handleLocationChange = () => setView(resolveViewFromLocation());
+    window.addEventListener("popstate", handleLocationChange);
+    window.addEventListener("hashchange", handleLocationChange);
+    return () => {
+      window.removeEventListener("popstate", handleLocationChange);
+      window.removeEventListener("hashchange", handleLocationChange);
+    };
+  }, []);
 
   return (
     <div style={{ minHeight: "100vh", background: shell.bg, color: shell.text }}>
-      <header style={{ padding: "12px 16px", borderBottom: `1px solid ${shell.border}`, background: shell.panel }}>
-        <strong style={{ marginRight: 12 }}>MedStudy Web</strong>
-        <button
-          onClick={() => setView("study")}
-          style={{ marginRight: 8, padding: "6px 10px", borderRadius: 6, border: "none", cursor: "pointer", background: view === "study" ? shell.primary : "#263350" }}
-        >
-          학습 앱
-        </button>
-        <button
-          onClick={() => setView("injector")}
-          style={{ padding: "6px 10px", borderRadius: 6, border: "none", cursor: "pointer", background: view === "injector" ? shell.primary : "#263350" }}
-        >
-          주입기
-        </button>
-      </header>
       {view === "study" ? <MedStudyApp /> : <CardInjectorApp />}
     </div>
   );
