@@ -468,7 +468,8 @@ const THEMES = {
     primary: "#0EA5E9", primaryDim: "#E0F2FE", primaryText: "#0284C7",
     success: "#16A34A", successDim: "#DCFCE7",
     danger: "#DC2626", dangerDim: "#FEE2E2",
-    warning: "#D97706",
+    warning: "#D97706", warningDim: "rgba(217,119,6,0.18)",
+    borderDim: "rgba(229,229,234,0.4)",
     cardFace: "#FFFFFF", cardText: "#1C1C1E", cardBorder: "#E5E5EA",
     paperText: "#1C1C1E", paperMuted: "#8E8E93",
   },
@@ -478,12 +479,21 @@ const THEMES = {
     primary: "#0EA5E9", primaryDim: "rgba(14,165,233,0.15)", primaryText: "#38BDF8",
     success: "#4ADE80", successDim: "rgba(74,222,128,0.12)",
     danger: "#F87171", dangerDim: "rgba(248,113,113,0.12)",
-    warning: "#FBBF24",
+    warning: "#FBBF24", warningDim: "rgba(251,191,36,0.16)",
+    borderDim: "rgba(58,58,60,0.45)",
     cardFace: "#2C2C2E", cardText: "#E8E8EC", cardBorder: "#3A3A3C",
     paperText: "#E8E8EC", paperMuted: "#6B7280",
   },
 };
 let C = THEMES.light;
+const dimColor = (col, alpha = "22") => (
+  col === C.primary ? (C.primaryDim || C.primary + alpha)
+    : col === C.success ? (C.successDim || C.success + alpha)
+      : col === C.danger ? (C.dangerDim || C.danger + alpha)
+        : col === C.warning ? (C.warningDim || C.warning + alpha)
+          : col === C.border ? (C.borderDim || C.border + alpha)
+            : col + alpha
+);
 
 const FONT_HEADING = "'Pretendard', system-ui, -apple-system, sans-serif";
 const FONT_BODY = "'Pretendard', system-ui, -apple-system, sans-serif";
@@ -506,7 +516,7 @@ const S = {
   btn: (v = "primary") => ({
     padding: "9px 18px", borderRadius: 8, border: "none", cursor: "pointer",
     fontWeight: 600, fontSize: 13,
-    fontFamily: "'Noto Sans KR', system-ui, sans-serif",
+    fontFamily: FONT_BODY,
     background: v === "primary" ? C.primary
               : v === "success"  ? C.success
               : v === "danger"   ? C.danger
@@ -523,13 +533,13 @@ const S = {
     padding: "8px 12px",
     color: C.text,
     fontSize: 14,
-    fontFamily: "'Noto Sans KR', system-ui, sans-serif",
+    fontFamily: FONT_BODY,
     width: "100%",
     boxSizing: "border-box",
   },
   label: { fontSize: 12, color: C.muted, marginBottom: 4, display: "block", fontWeight: 500 },
   badge: (col = C.primary) => ({
-    background: col + "28",
+    background: dimColor(col, "28"),
     color: col,
     padding: "2px 8px",
     borderRadius: 9999,
@@ -571,30 +581,18 @@ const S = {
     background: v === "forgot" ? (C.dangerDim || C.danger + "22") : (C.successDim || C.success + "22"),
     color: v === "forgot" ? C.danger : C.success,
   }),
-  badgePaper: (col = "#b84a2e", bg = "#f5e0da") => ({
-    background: bg,
-    color: col,
-    padding: "3px 9px",
-    borderRadius: 6,
-    fontSize: 10,
-    fontWeight: 700,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    display: "inline-block",
-    fontFamily: FONT_BODY,
-  }),
 };
 
 // Typography helpers
 const T = {
   heading: {
-    fontFamily: "'Playfair Display', Georgia, serif",
+    fontFamily: FONT_HEADING,
     fontWeight: 700,
     letterSpacing: "-0.02em",
     color: C.text,
   },
   questionText: {
-    fontFamily: "'Playfair Display', Georgia, serif",
+    fontFamily: FONT_HEADING,
     fontWeight: 500,
     lineHeight: 1.65,
     fontSize: 17,
@@ -865,10 +863,10 @@ export default function MedStudyApp() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'Noto Sans KR', system-ui, sans-serif", fontSize: 14 }}>
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: FONT_BODY, fontSize: 14 }}>
       {/* Header */}
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ fontWeight: 700, fontSize: 16, color: C.text, letterSpacing: "-0.01em", fontFamily: "'Playfair Display', Georgia, serif" }}>
+        <div style={{ fontWeight: 700, fontSize: 16, color: C.text, letterSpacing: "-0.01em", fontFamily: FONT_HEADING }}>
           MedStudy <span style={{ color: C.primary }}>AI</span>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -889,14 +887,14 @@ export default function MedStudyApp() {
 
       {/* Legacy Banner */}
       {data.hasLegacy && (
-        <div style={{ background: "#744210", color: "#fefcbf", padding: "8px 20px", fontSize: 13 }}>
+        <div style={{ background: (C.warningDim || C.warning + "33"), color: C.text, padding: "8px 20px", fontSize: 13 }}>
           ⚠️ 구 custom-quiz 데이터 발견 → 관리 탭에서 마이그레이션 실행하세요.
         </div>
       )}
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: "fixed", top: 60, right: 20, zIndex: 999, padding: "10px 16px", borderRadius: 10, background: toast.type === "error" ? C.danger : C.success, color: "#1a1008", fontWeight: 700, fontSize: 13, border: `1px solid ${toast.type === "error" ? C.danger : C.success}`, fontFamily: FONT_BODY }}>
+        <div style={{ position: "fixed", top: 60, right: 20, zIndex: 999, padding: "10px 16px", borderRadius: 10, background: toast.type === "error" ? C.danger : C.success, color: C.text, fontWeight: 700, fontSize: 13, border: `1px solid ${toast.type === "error" ? C.danger : C.success}`, fontFamily: FONT_BODY }}>
           {toast.msg}
         </div>
       )}
@@ -977,7 +975,7 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
 
   const lmCfg = {
     D7: { label: "D-7 집중 모드", color: C.warning, desc: "마스터된 카드 제외 · 취약 항목 우선" },
-    D3: { label: "D-3 최우선 모드", color: "#e07c30", desc: "고중요도 30% + 최근 오답" },
+    D3: { label: "D-3 최우선 모드", color: C.warning, desc: "고중요도 30% + 최근 오답" },
     D1: { label: "D-1 최종 점검", color: C.danger,  desc: "최고 중요도 상위 15% 출제" },
   };
 
@@ -993,9 +991,9 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
       {/* 인사말 */}
       <div style={{ marginBottom: 4 }}>
         <div style={{
-          fontFamily: "'Gowun Batang', serif",
+          fontFamily: FONT_HEADING,
           fontSize: 22,
-          color: "#c4b89a",
+          color: C.muted,
           lineHeight: 1.3,
           fontWeight: 400,
         }}>
@@ -1035,7 +1033,7 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
       {/* ── Last-Mile banner — only when active ── */}
       {lastMileMode && lmCfg[lastMileMode] && (
         <div style={{
-          background: lmCfg[lastMileMode].color + "18",
+          background: dimColor(lmCfg[lastMileMode].color, "18"),
           border: `1px solid ${lmCfg[lastMileMode].color}`,
           borderRadius: 10, padding: "11px 16px",
           display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -1069,7 +1067,7 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode 
             <div style={{
               fontSize: 12, fontWeight: 600,
               color: examUrgent ? C.danger : C.muted,
-              background: (examUrgent ? C.danger : C.border) + "28",
+              background: dimColor((examUrgent ? C.danger : C.border), "28"),
               borderRadius: 6, padding: "2px 8px",
             }}>
               {nearestExam.name} · D-{nearestDays}
@@ -1321,7 +1319,7 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
     setCurrent(c => c + 1); setFlipped(false); setStartTime(Date.now());
   }
   const dueCount = getDueCards(selectedMode !== "normal" ? selectedMode : null).length;
-  const modeColor = selectedMode === "D1" ? C.danger : selectedMode === "D3" ? "#f97316" : selectedMode === "D7" ? C.warning : selectedMode === "danger" ? C.danger : C.primary;
+  const modeColor = selectedMode === "D1" ? C.danger : selectedMode === "D3" ? C.warning : selectedMode === "D7" ? C.warning : selectedMode === "danger" ? C.danger : C.primary;
   const modeDesc = {
     normal: "하이브리드 우선순위 (importance x SRS x 시험근접도)",
     danger: "최근 3회 중 2회 이상 오답 카드 집중 복습",
@@ -1348,7 +1346,7 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
         )}
         {nearestDays !== null && nearestDays <= 3 && (
           <div style={{
-            background: C.danger + "18",
+            background: (C.dangerDim || C.danger + "18"),
             border: `1px solid ${C.danger}`,
             borderRadius: 10, padding: "10px 14px", marginBottom: 12,
           }}>
@@ -1362,7 +1360,7 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
         )}
         {nearestDays !== null && nearestDays > 3 && nearestDays <= 7 && (
           <div style={{
-            background: C.warning + "18",
+            background: (C.warningDim || C.warning + "18"),
             border: `1px solid ${C.warning}`,
             borderRadius: 10, padding: "10px 14px", marginBottom: 12,
           }}>
@@ -1448,9 +1446,9 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
       {/* Progress + metadata row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, fontSize: 12, color: C.muted }}>
         <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-          <span style={S.badgePaper("#8a7f6e", "#ece8de")}>{cardState}</span>
-          {isDangerCard && <span style={S.badgePaper("#b84a2e", "#f5e0da")}>위험</span>}
-          <span style={S.badgePaper("#5a7a52", "#e8eee6")}>imp {importance.toFixed(1)}</span>
+          <span style={S.badge(C.muted)}>{cardState}</span>
+          {isDangerCard && <span style={S.badge(C.danger)}>위험</span>}
+          <span style={S.badge(C.success)}>imp {importance.toFixed(1)}</span>
         </div>
         <span style={{ fontWeight: 500 }}>{(current + 1)} / {sessionCards.length}</span>
       </div>
@@ -1478,14 +1476,14 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
         {flipped && (
           <>
             <div style={{ fontFamily: FONT_HEADING, fontSize: 19, fontWeight: 700, lineHeight: 1.6, color: C.paperText, textAlign: "center", marginBottom: 20, wordBreak: "keep-all" }}>{card.front}</div>
-            <hr style={{ border: "none", borderTop: "1px solid #e4ddd1", margin: "0 8px 18px", width: "100%" }} />
-            <div style={{ fontFamily: FONT_BODY, fontSize: 15, color: "#5a5048", lineHeight: 1.65, textAlign: "center", marginBottom: 12 }}>
+            <hr style={{ border: "none", borderTop: `1px solid ${C.border}`, margin: "0 8px 18px", width: "100%" }} />
+            <div style={{ fontFamily: FONT_BODY, fontSize: 15, color: C.paperText, lineHeight: 1.65, textAlign: "center", marginBottom: 12 }}>
               {card.back}
             </div>
             {card.acceptedVariants && card.acceptedVariants.length > 0 && (
               <div style={{
-                background: "#f2ece0", borderRadius: 8, padding: "8px 12px",
-                fontSize: 11, color: "#9a9082", textAlign: "center", marginBottom: 8,
+                background: C.surface2, borderRadius: 8, padding: "8px 12px",
+                fontSize: 11, color: C.paperMuted, textAlign: "center", marginBottom: 8,
                 fontFamily: FONT_BODY,
               }}>
                 허용 표현: {card.acceptedVariants.join(" · ")}
@@ -1495,7 +1493,7 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
         )}
         <CardImage image_url={card.image_url} image_present={card.image_present} image_ref={card.image_ref} />
         {flipped && card.explanations && card.explanations.quick && (
-          <div style={{ background: "#f2ece0", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#9a9082", lineHeight: 1.6, textAlign: "center", fontFamily: FONT_BODY, marginTop: 10, maxWidth: 440 }}>
+          <div style={{ background: C.surface2, borderRadius: 10, padding: "10px 14px", fontSize: 12, color: C.paperMuted, lineHeight: 1.6, textAlign: "center", fontFamily: FONT_BODY, marginTop: 10, maxWidth: 440 }}>
             {card.explanations.quick}
           </div>
         )}
@@ -1637,7 +1635,7 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
         }}
         onClick={() => { if (!flipped) setFlipped(true); }}
       >
-        <div style={{ fontSize: 11, color: "#9a8870", marginBottom: 12, fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+        <div style={{ fontSize: 11, color: C.paperMuted, marginBottom: 12, fontFamily: FONT_BODY, letterSpacing: "0.04em", textTransform: "uppercase" }}>
           {card.subject} · {card.chapter}
         </div>
         <div style={{
@@ -1645,19 +1643,19 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams }) {
           fontWeight: flipped ? 500 : 600,
           lineHeight: 1.7,
           color: C.cardText,
-          fontFamily: "'Playfair Display', Georgia, serif",
+          fontFamily: FONT_HEADING,
           letterSpacing: "-0.01em",
         }}>
           {flipped ? card.back : card.front}
         </div>
         <CardImage image_url={card.image_url} image_present={card.image_present} image_ref={card.image_ref} />
         {!flipped && (
-          <div style={{ marginTop: 18, fontSize: 11, color: "#b8a898", fontFamily: "'Noto Sans KR', sans-serif" }}>
+          <div style={{ marginTop: 18, fontSize: 11, color: C.muted, fontFamily: FONT_BODY }}>
             탭하여 답 확인
           </div>
         )}
       </div>
-      <div style={{ fontSize: 12, color: C.muted, textAlign: "center", margin: "6px 0 14px", fontFamily: "'Noto Sans KR', sans-serif" }}>
+      <div style={{ fontSize: 12, color: C.muted, textAlign: "center", margin: "6px 0 14px", fontFamily: FONT_BODY }}>
         {idx + 1} / {filteredCards.length}
       </div>
 
@@ -1913,7 +1911,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
             onClick={handleCardReveal}
           >
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{item.data.subject} · {item.data.chapter}</div>
-            <div style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.6, fontFamily: "'Playfair Display', Georgia, serif", letterSpacing: "-0.01em" }}>{revealed ? item.data.back : item.data.front}</div>
+            <div style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.6, fontFamily: FONT_HEADING, letterSpacing: "-0.01em" }}>{revealed ? item.data.back : item.data.front}</div>
             <CardImage image_url={item.data.image_url} image_present={item.data.image_present} image_ref={item.data.image_ref} />
             {!revealed && <div style={{ marginTop: 14, fontSize: 12, color: C.muted }}>탭하여 답 확인</div>}
           </div>
@@ -1928,7 +1926,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
         <div>
           <div style={S.card}>
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{item.data.subject}</div>
-            <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.8, whiteSpace: "pre-wrap", marginBottom: 16, fontFamily: "'Playfair Display', Georgia, serif", letterSpacing: "-0.01em" }}>
+            <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.8, whiteSpace: "pre-wrap", marginBottom: 16, fontFamily: FONT_HEADING, letterSpacing: "-0.01em" }}>
               {item.data.parsed_question || item.data.raw_question}
             </div>
             <CardImage image_url={item.data.image_url} image_present={item.data.image_present} image_ref={item.data.image_ref} />
@@ -1936,10 +1934,10 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams }) {
               let bg = "transparent";
               let border = C.border;
               if (revealed) {
-                if (opt.correct) { bg = C.success + "33"; border = C.success; }
-                else if (selected === i) { bg = C.danger + "22"; border = C.danger; }
+                if (opt.correct) { bg = (C.successDim || C.success + "33"); border = C.success; }
+                else if (selected === i) { bg = (C.dangerDim || C.danger + "22"); border = C.danger; }
               } else if (selected === i) {
-                bg = C.primary + "22"; border = C.primary;
+                bg = (C.primaryDim || C.primary + "22"); border = C.primary;
               }
               return (
                 <div key={i} onClick={() => { if (!revealed) setSelected(i); }}
@@ -2708,7 +2706,7 @@ function ManagePage({ data, updateData, showToast }) {
           ) : filteredQ.map(q => {
             const statusColors = {
               confirmed: C.success, unverified: C.warning,
-              conflict: C.danger, unstable_parse: "#f97316", archived_reference: C.muted,
+              conflict: C.danger, unstable_parse: C.warning, archived_reference: C.muted,
             };
             const sc = statusColors[q.status] || C.warning;
             return (
@@ -2799,7 +2797,7 @@ function ManagePage({ data, updateData, showToast }) {
           {pdfStatus.phase !== "idle" && (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>{pdfStatus.phase}</div>
-              <div style={{ width: "100%", height: 8, borderRadius: 999, background: "#2b3b55", overflow: "hidden" }}>
+              <div style={{ width: "100%", height: 8, borderRadius: 999, background: C.surface2, overflow: "hidden" }}>
                 <div style={{ width: `${pdfStatus.progress}%`, height: "100%", background: C.primary }} />
               </div>
             </div>
@@ -2821,7 +2819,7 @@ function ManagePage({ data, updateData, showToast }) {
           {reviewQueueQ.length === 0 ? (
             <div style={S.card}><div style={{ color: C.muted }}>검토 대기 문제 없음 ✓</div></div>
           ) : reviewQueueQ.map(q => {
-            const statusColors = { conflict: C.danger, unstable_parse: "#f97316", unverified: C.warning };
+            const statusColors = { conflict: C.danger, unstable_parse: C.warning, unverified: C.warning };
             const sc = statusColors[q.status] || C.warning;
             return (
               <div key={q.id} style={{ ...S.card, borderLeft: `3px solid ${sc}` }}>
@@ -3464,7 +3462,7 @@ function ConceptPage({ data, updateData, showToast }) {
               style={{
                 padding: "3px 10px", borderRadius: 6,
                 border: `1px solid ${C.warning}`,
-                background: search === "__stub__" ? C.warning + "22" : "transparent",
+                background: search === "__stub__" ? (C.warningDim || C.warning + "22") : "transparent",
                 color: C.warning, fontSize: 11, fontWeight: 700, cursor: "pointer",
               }}>
               검토 필요 {concepts.filter(c => c.stub && c.needs_review).length}
@@ -3961,10 +3959,10 @@ function DecisionTrainingPage({ data, logReview, showToast, refreshClusters }) {
           let borderCol = C.border;
           let bgCol = "transparent";
           if (revealed) {
-            if (opt.correct) { borderCol = C.success; bgCol = C.success + "22"; }
-            else if (selected === i) { borderCol = C.danger; bgCol = C.danger + "22"; }
+            if (opt.correct) { borderCol = C.success; bgCol = (C.successDim || C.success + "22"); }
+            else if (selected === i) { borderCol = C.danger; bgCol = (C.dangerDim || C.danger + "22"); }
           } else if (selected === i) {
-            borderCol = C.primary; bgCol = C.primary + "22";
+            borderCol = C.primary; bgCol = (C.primaryDim || C.primary + "22");
           }
           return (
             <div key={i} onClick={() => { if (!revealed) setSelected(i); }}
@@ -4108,7 +4106,7 @@ function CompressionPage({ data, getUpcomingExams }) {
                   onClick={() => { setScopeType(key); setScanned({}); }}
                   style={{
                     padding: "4px 10px", borderRadius: 6, border: `1px solid ${scopeType === key ? C.primary : C.border}`,
-                    background: scopeType === key ? C.primary + "22" : "transparent",
+                    background: scopeType === key ? (C.primaryDim || C.primary + "22") : "transparent",
                     color: scopeType === key ? C.primary : C.muted,
                     fontSize: 11, fontWeight: 600, cursor: "pointer",
                   }}>
@@ -4192,7 +4190,7 @@ function CompressionPage({ data, getUpcomingExams }) {
       })}
 
       {pool.length > 0 && scannedCount === pool.length && (
-        <div style={{ ...S.card, background: C.success + "1a", border: `1px solid ${C.success}`, textAlign: "center", marginTop: 8 }}>
+        <div style={{ ...S.card, background: (C.successDim || C.success + "1a"), border: `1px solid ${C.success}`, textAlign: "center", marginTop: 8 }}>
           <div style={{ color: C.success, fontWeight: 700, fontSize: 15 }}>압축 복습 완료</div>
         </div>
       )}
