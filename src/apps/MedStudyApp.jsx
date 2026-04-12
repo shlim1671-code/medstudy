@@ -93,54 +93,74 @@ const SUBJECT_SLUG_MAP = {
 };
 
 const PDF_PARSE_PROMPT = `
-You are an expert data extraction engine specialized in Korean medical school exam documents.
-Your task: read the ENTIRE document first, then extract ALL questions into a JSON array.
+You are an expert data extraction engine for Korean medical school exams.
 
-=== PHASE 1: UNDERSTAND THE DOCUMENT ===
-Before extracting, mentally map the document:
-- Identify the question numbering style used (e.g. "1번", "1.", "Q1", etc.)
-- Identify where answer choices appear (inline, in shared option boxes before/after questions, or not at all)
-- Identify where answers appear (inline, end-of-page key, last-page table, not present)
-- Identify non-question content to ignore (intro paragraphs, professor names, section headers, announcements)
+WORKFLOW:
+1. Read the ENTIRE document from start to end.
+2. Identify every question boundary using numbering patterns.
+3. For each question, extract ALL fields below.
+4. Return a single JSON array with ALL questions. Do not skip any.
 
-=== PHASE 2: COLLECT SHARED RESOURCES ===
-Some documents place shared option boxes and answer keys separately from questions.
-- Shared option box: a labeled box like "[5-6번] 보기: 1.A 2.B 3.C" — note which question numbers it applies to
-- Answer key: may appear as a table, a numbered list, or inline markers (e.g. ③, ans:2, 정답:③)
-- Circled number mapping: ① → 1, ② → 2, ③ → 3, ④ → 4, ⑤ → 5
-Collect these before extraction so you can attach them to the right questions.
+QUESTION BOUNDARY DETECTION:
+- Common patterns: "1.", "2)", "문제 1", "Q1", "#1", "1번", "(1)", "제1문"
+- Sub-questions under a shared stem: "1-1", "1-2" or "(가)", "(나)" or "ㄱ.", "ㄴ."
+- A new question starts when a new number pattern appears at the start of a line.
+- Answer keys may appear at the end — extract correct answers from them.
 
-=== PHASE 3: EXTRACT ALL QUESTIONS ===
-Extract every question you identified. For each question output:
+OPTION/CHOICE DETECTION:
+- Numbered: "①②③④⑤", "1)2)3)4)5)", "(1)(2)(3)(4)(5)"
+- Lettered: "ㄱ.ㄴ.ㄷ.", "가.나.다.", "a.b.c."
+- Combination: "ㄱ,ㄴ" "ㄱ,ㄷ" (보기 조합형)
+- True/False: "O/X", "맞다/틀리다"
 
+SHARED STEM (공통 지문) RULE:
+- If multiple questions share the same introductory paragraph or "다음을 읽고"
+  passage, DUPLICATE the full shared stem text into EACH question's raw_question.
+- Include any tables, lists, or data that are part of the shared context.
+
+IMAGE HANDLING:
+- If text contains [IMAGE pXXX_iYY] markers, set image_present: true and
+  image_ref to the marker ID (e.g. "p003_i01").
+- If the question references "그림", "사진", "도표", "표" but no marker exists,
+  still set image_present: true and image_ref: null.
+
+OUTPUT SCHEMA — for EACH question:
 {
-  "raw_question": "<full original stem + any inline options, exactly as written>",
+  "raw_question": "exact original question text including shared stem if any",
   "options": [
-    { "text": "<option text>", "correct": true/false }
+    {"text": "option text", "correct": true/false}
   ],
-  "canonicalAnswer": "<correct answer text, or null if unknown>",
-  "type": "objective" | "subjective",
-  "image_present": true | false,
-  "image_ref": "<e.g. p003_i01, or null>",
-  "confidence": "HIGH" | "MEDIUM" | "NONE"
+  "canonicalAnswer": "exact correct answer text, or null if unknown",
+  "type": "objective" or "subjective",
+  "image_present": true/false,
+  "image_ref": "pXXX_iYY" or null,
+  "confidence": "HIGH" / "MEDIUM" / "NONE"
 }
 
-RULES:
-- raw_question: include the question number and full stem. For shared-stem questions, duplicate the full shared stem into EACH sub-question.
-- options: use inline choices if present; use shared option box if applicable; use [] if truly no choices exist.
-- correct: mark true only if the answer key confirms it. Otherwise false for all options.
-- canonicalAnswer: full text of correct option (objective) or written answer (subjective). null if not in key.
-- type: "objective" if the answer is chosen from options. "subjective" if open-ended, fill-in-blank, or written answer.
-- image_present: true if there is an image, diagram, or [IMAGE ...] marker in or immediately adjacent to the question.
-- confidence: "HIGH" if answer confirmed by key. "MEDIUM" if answer strongly implied. "NONE" if absent from key.
+TYPE CLASSIFICATION:
+- "objective": has numbered/lettered choices (MCQ, T/F, 보기 조합)
+- "subjective": fill-in-the-blank, short answer, essay, labeling, drawing
+
+CONFIDENCE:
+- HIGH: answer explicitly provided in answer key or marked in the document
+- MEDIUM: answer strongly implied by context (e.g. bold/underlined option)
+- NONE: no answer provided anywhere in the document
+
+ANSWER KEY INTEGRATION:
+- If the document contains an answer key section (정답, 답, Answer Key),
+  match each answer to its question number and set the correct option's
+  "correct" field to true, set canonicalAnswer, and confidence to "HIGH".
 
 CRITICAL RULES:
-- Extract ALL questions. Never skip a question because the answer is missing.
-- Ignore ALL non-question text: intros, announcements, professor names, section titles, answer keys themselves.
-- Do not solve, explain, or add any content not present in the original document.
-- Handle any numbering or formatting style — there is no single fixed format.
+- Extract ALL questions. Never skip any question.
+- Preserve original Korean text exactly. Do not translate or paraphrase.
+- Do not solve questions or generate explanations.
+- Do not add content not present in the original document.
+- Handle mixed formatting — questions may use different numbering styles
+  within the same document.
+- If a question has no options (e.g. "빈칸을 채우시오"), type = "subjective".
 
-Return ONLY a valid JSON array. No markdown fences, no explanation, no preamble.
+Return ONLY a valid JSON array. No markdown, no explanation, no preamble.
 `.trim();
 
 function normalizeConfidence(raw) {
@@ -3178,6 +3198,36 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
     showToast("저장됨");
   }
 
+  async function callGemini(textChunk, apiKey) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          generationConfig: {
+            maxOutputTokens: 65536,
+            temperature: 0,
+          },
+          contents: [{
+            parts: [{ text: `${PDF_PARSE_PROMPT}
+
+=== RAW EXAM TEXT START ===
+${textChunk}
+=== RAW EXAM TEXT END ===` }],
+          }],
+        }),
+      }
+    );
+    const json = await res.json();
+    if (!res.ok) {
+      const msg = json?.error?.message || `HTTP ${res.status}`;
+      throw new Error(`Gemini API 오류: ${msg}`);
+    }
+    const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+    return safeJsonArrayFromText(rawText);
+  }
+
   async function migrateLegacy() {
     try {
       const legacy = await sGet("medstudy:custom-quiz");
@@ -3247,27 +3297,45 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
         console.warn("[MedStudy] imageMapping이 서버 응답에 없습니다. 이미지 연결 불가.");
       }
 
-      setPdfStatus({ phase: "문제 구조화 중...", progress: 55 });
-      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(pdfForm.geminiApiKey.trim())}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          generationConfig: {
-            maxOutputTokens: 65536,
-            temperature: 0.1,
-          },
-          contents: [{
-            parts: [{ text: `${PDF_PARSE_PROMPT}\n\n=== RAW EXAM TEXT START ===\n${pdfJson.text}\n=== RAW EXAM TEXT END ===` }],
-          }],
-        }),
-      });
-      const geminiJson = await geminiRes.json();
-      if (!geminiRes.ok) {
-        const msg = geminiJson?.error?.message || `HTTP ${geminiRes.status}`;
-        throw new Error(`Gemini API 오류: ${msg}`);
+      // Split text into chunks if too long (>15000 chars ≈ boundary for reliable extraction)
+      const CHUNK_SIZE = 15000;
+      const fullText = pdfJson.text || "";
+      let allParsedItems = [];
+
+      if (fullText.length <= CHUNK_SIZE) {
+        setPdfStatus({ phase: "문제 구조화 중...", progress: 55 });
+        allParsedItems = await callGemini(fullText, pdfForm.geminiApiKey.trim());
+      } else {
+        // Split by double newlines to avoid cutting mid-question
+        const paragraphs = fullText.split(/\n\n+/);
+        const chunks = [];
+        let current = "";
+        for (const p of paragraphs) {
+          if ((current + "\n\n" + p).length > CHUNK_SIZE && current.length > 0) {
+            chunks.push(current);
+            current = p;
+          } else {
+            current = current ? current + "\n\n" + p : p;
+          }
+        }
+        if (current) chunks.push(current);
+
+        for (let i = 0; i < chunks.length; i++) {
+          setPdfStatus({
+            phase: `문제 구조화 중... (${i + 1}/${chunks.length})`,
+            progress: 40 + Math.round((i / chunks.length) * 40),
+          });
+          try {
+            const items = await callGemini(chunks[i], pdfForm.geminiApiKey.trim());
+            allParsedItems.push(...items);
+          } catch (e) {
+            console.error(`Chunk ${i + 1} failed:`, e);
+            // Continue with other chunks instead of failing entirely
+          }
+        }
       }
-      const rawText = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-      const parsedItems = safeJsonArrayFromText(rawText);
+
+      const parsedItems = allParsedItems;
 
       setPdfStatus({ phase: "저장 중...", progress: 80 });
       const questions = data.questions || [];
