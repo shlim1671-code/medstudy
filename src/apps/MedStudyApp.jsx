@@ -134,7 +134,8 @@ OUTPUT SCHEMA — for EACH question:
   "type": "objective" or "subjective",
   "image_present": true/false,
   "image_ref": "pXXX_iYY" or null,
-  "confidence": "HIGH" / "MEDIUM" / "NONE"
+  "confidence": "HIGH" / "MEDIUM" / "NONE",
+  "question_family_id": "shared id for decomposed sub-items from same parent, or null"
 }
 
 TYPE CLASSIFICATION:
@@ -150,6 +151,22 @@ ANSWER KEY INTEGRATION:
 - If the document contains an answer key section (정답, 답, Answer Key),
   match each answer to its question number and set the correct option's
   "correct" field to true, set canonicalAnswer, and confidence to "HIGH".
+
+=== SPECIAL CASE: IMAGE-LABELED FILL-IN-BLANK ===
+Some questions show a single diagram/image with numbered labels (1, 2, 3...)
+pointing to different structures, and a shared stem like
+"다음 위치에 해당하는 명칭을 쓰시오".
+
+For these questions, DECOMPOSE into separate items — one per numbered label:
+- Each item gets its own entry in the output array.
+- raw_question: include the shared stem + the specific label number,
+  e.g. "[1-6번] 다음 위치에 해당하는 명칭을 쓰시오 — 1번"
+- type: "subjective"
+- All items from the same parent question share the same question_family_id
+  (generate a short id like "fam_" + original question number).
+- image_present: true (all share the same parent image).
+- image_ref: same image_ref for all items in the family.
+- canonicalAnswer: the specific answer for that label number, or null if unknown.
 
 CRITICAL RULES:
 - Extract ALL questions. Never skip any question.
@@ -2507,6 +2524,7 @@ function JsonBulkPanel({ showToast, S, C }) {
             question_intent: "definition",
             occurrence_key: [subjectSlug, "manual_bulk", sourceType].join("|"),
             source_signature: ["", "definition", (canonicalAnswer || "").slice(0, 40)].join("||"),
+            question_family_id: item.question_family_id || null,
             explanations: { quick: "", professor: null, textbook: null, extra: null },
             image_present: !!item.image_present,
             image_ref: item.image_ref || null,
@@ -3391,6 +3409,7 @@ ${textChunk}
             question_intent: "definition",
             occurrence_key: [subjectSlug, pdfForm.exam_unit.trim(), pdfForm.source_type].join("|"),
             source_signature: ["", "definition", (canonicalAnswer || "").slice(0, 40)].join("||"),
+            question_family_id: item.question_family_id || null,
             explanations: { quick: "", professor: null, textbook: null, extra: null },
             image_present: !!item.image_present,
             image_ref: imageRef,
@@ -3418,6 +3437,7 @@ ${textChunk}
             templateType: "general",
             tier: "active",
             source_type: pdfForm.source_type,
+            question_family_id: item.question_family_id || null,
             image_present: !!item.image_present,
             image_ref: imageRef,
             image_url: mappedImage?.url || null,
