@@ -82,6 +82,18 @@ const SOURCE_TYPE_LABELS = {
   textbook: "교과서",
   manual: "직접입력",
 };
+
+function formatSource(item) {
+  const parts = [];
+  if (item.subject) parts.push(item.subject);
+  const unit = item.exam_unit || item.source_detail || item.chapter;
+  if (unit) parts.push(unit);
+  if (item.source_type && SOURCE_TYPE_LABELS[item.source_type]) {
+    parts.push(SOURCE_TYPE_LABELS[item.source_type]);
+  }
+  return parts.join(" · ");
+}
+
 const SUBJECT_SLUG_MAP = {
   해부학: "anatomy",
   생리학: "physiology",
@@ -1610,7 +1622,7 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
         }}
       >
         <div style={{ fontSize: 11, color: C.paperMuted, marginBottom: 10, letterSpacing: "0.04em", fontFamily: FONT_BODY }}>
-          {card.subject}{card.chapter ? " · " + card.chapter : ""}
+          {formatSource(card)}
         </div>
         {!flipped && <div style={{ fontFamily: FONT_HEADING, fontSize: 19, fontWeight: 700, lineHeight: 1.6, color: C.paperText, textAlign: "center", marginBottom: 20, wordBreak: "keep-all" }}>{card.front}</div>}
         {flipped && (
@@ -1775,8 +1787,8 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams, S, T, C }
         }}
         onClick={() => { if (!flipped) setFlipped(true); }}
       >
-        <div style={{ fontSize: 11, color: C.paperMuted, marginBottom: 12, fontFamily: FONT_BODY, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-          {card.subject} · {card.chapter}
+        <div style={{ fontSize: 11, color: C.paperMuted, marginBottom: 12, fontFamily: FONT_BODY, letterSpacing: "0.04em" }}>
+          {formatSource(card)}
         </div>
         <div style={{
           fontSize: flipped ? 16 : 20,
@@ -2059,7 +2071,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, onS
             style={{ ...S.card, minHeight: 170, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", cursor: revealed ? "default" : "pointer" }}
             onClick={handleCardReveal}
           >
-            <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{item.data.subject} · {item.data.chapter}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{formatSource(item.data)}</div>
             <div style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.6, fontFamily: FONT_HEADING, letterSpacing: "-0.01em" }}>{revealed ? item.data.back : item.data.front}</div>
             <CardImage image_url={item.data.image_url} image_present={item.data.image_present} image_ref={item.data.image_ref} />
             {!revealed && <div style={{ marginTop: 14, fontSize: 12, color: C.muted }}>탭하여 답 확인</div>}
@@ -2074,7 +2086,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, onS
       ) : (
         <div>
           <div style={S.card}>
-            <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{item.data.subject}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{formatSource(item.data)}</div>
             <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.8, whiteSpace: "pre-wrap", marginBottom: 16, fontFamily: FONT_HEADING, letterSpacing: "-0.01em" }}>
               {item.data.parsed_question || item.data.raw_question}
             </div>
