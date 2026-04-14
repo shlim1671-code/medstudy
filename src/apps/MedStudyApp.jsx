@@ -970,10 +970,19 @@ export default function MedStudyApp() {
             MedStudy <span style={{ color: C.primary }}>AI</span>
             <span style={{ fontSize: 12, color: C.muted, fontWeight: 400, marginLeft: 10 }}>
               {effectiveSession.label}
+              {effectiveSession.progress && (
+                <span style={{ marginLeft: 8, color: C.primary, fontWeight: 600 }}>
+                  {effectiveSession.progress}
+                </span>
+              )}
             </span>
           </div>
           <button
-            onClick={() => { setExitSignal(s => s + 1); setSessionState(null); }}
+            onClick={() => {
+              if (!window.confirm("세션을 종료하시겠습니까? 현재 진행도가 초기화됩니다.")) return;
+              setExitSignal(s => s + 1);
+              setSessionState(null);
+            }}
             style={{
               padding: "6px 14px", borderRadius: 8,
               border: `1px solid ${C.border}`,
@@ -1456,7 +1465,7 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
     const due = getDueCards(mode);
     if (due.length === 0) { showToast("복습할 카드 없음", "error"); return; }
     setSessionCards(due); setCurrent(0); setFlipped(false);
-    if (onSessionChange) onSessionChange({ label: "복습 중" });
+    if (onSessionChange) onSessionChange({ label: "복습 중", progress: "1 / " + due.length });
     setStartTime(Date.now()); setSessionLog([]);
   }
   function reviewGrade(g) {
@@ -1467,7 +1476,11 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
     updateSrs(card.id, g);
     logReview({ cardId: card.id, questionId: null, correct, mode: "review", responseTimeSec });
     setSessionLog(prev => [...prev, { card, grade: g, correct }]);
-    if (current + 1 >= sessionCards.length && onSessionChange) onSessionChange(null);
+    if (current + 1 >= sessionCards.length) {
+      if (onSessionChange) onSessionChange(null);
+    } else {
+      if (onSessionChange) onSessionChange({ label: "복습 중", progress: (current + 2) + " / " + sessionCards.length });
+    }
     setCurrent(c => c + 1); setFlipped(false); setStartTime(Date.now());
   }
   const dueCount = getDueCards(selectedMode !== "normal" ? selectedMode : null).length;
@@ -1894,7 +1907,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, onS
     setSessionResults([]);
     setStartTime(Date.now());
     setPhase("running");
-    if (onSessionChange) onSessionChange({ label: "퀴즈 중" });
+    if (onSessionChange) onSessionChange({ label: "퀴즈 중", progress: "1 / " + built.length });
   }
 
   function handleCardReveal() {
@@ -1927,6 +1940,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, onS
       setPhase("results");
       if (onSessionChange) onSessionChange(null);
     } else {
+      if (onSessionChange) onSessionChange({ label: "퀴즈 중", progress: (current + 2) + " / " + items.length });
       setCurrent(c => c + 1);
       setSelected(null);
       setRevealed(false);
