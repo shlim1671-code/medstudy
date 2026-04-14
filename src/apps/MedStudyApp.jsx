@@ -940,14 +940,8 @@ export default function MedStudyApp() {
 
   const Pages = { home: HomePage, review: ReviewPage, quiz: QuizPage, flashcard: FlashcardPage, plan: PlanPage, stats: StatsPage, concepts: ConceptPage, manage: ManagePage, decision: DecisionTrainingPage, compress: CompressionPage };
   const PageComp = Pages[page] || HomePage;
-  const effectiveSession = sessionState || (page === "flashcard" ? { label: "카드 학습" } : null);
+  const effectiveSession = sessionState;
 
-
-  useEffect(() => {
-    if (exitSignal > 0 && page === "flashcard") {
-      setPage("home");
-    }
-  }, [exitSignal, page]);
 
   if (loading) {
     return (
@@ -1694,12 +1688,20 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
 // ─────────────────────────────────────────
 // FlashcardPage
 // ─────────────────────────────────────────
-function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams, S, T, C }) {
+function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams, onSessionChange, exitSessionSignal, S, T, C }) {
   const [subject, setSubject] = useState("전체");
   const [examScope, setExamScope] = useState("전체");
   const [current, setCurrent] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [startTime, setStartTime] = useState(Date.now());
+  const [sessionStarted, setSessionStarted] = useState(false);
+
+  useEffect(() => {
+    if (exitSessionSignal > 0 && sessionStarted) {
+      setSessionStarted(false);
+      if (onSessionChange) onSessionChange(null);
+    }
+  }, [exitSessionSignal]);
 
   const upcomingExams = getUpcomingExams();
   const subjects = ["전체", ...Array.from(new Set((data.cards || []).map(c => c.subject).filter(Boolean)))];
@@ -1749,37 +1751,60 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams, S, T, C }
     setCurrent(c => c + 1);
     setFlipped(false);
     setStartTime(Date.now());
+    if (onSessionChange) {
+      const nextIdx = (current + 1) % filteredCards.length;
+      onSessionChange({ label: "카드 학습", progress: (nextIdx + 1) + " / " + filteredCards.length });
+    }
   }
 
-  if (filteredCards.length === 0) {
+  if (filteredCards.length === 0 && !sessionStarted) {
     return (
       <div>
-        <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>플래시카드</h2>
+        <h2 style={{ margin: "0 0 16px", color: C.primary, ...T.heading }}>플래시카드</h2>
         <div style={S.card}><div style={{ color: C.muted }}>카드가 없습니다. 카드 주입기로 추가하세요.</div></div>
       </div>
     );
   }
 
-  const idx = current % filteredCards.length;
+  const idx = current % Math.max(filteredCards.length, 1);
   const card = filteredCards[idx];
+
+  if (!sessionStarted) {
+    return (
+      <div>
+        <h2 style={{ margin: "0 0 16px", color: C.primary, ...T.heading }}>플래시카드</h2>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+          <select value={subject} onChange={e => { setSubject(e.target.value); setCurrent(0); setFlipped(false); }} style={{ ...S.input, width: "auto" }}>
+            {subjects.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          {upcomingExams.length > 0 && (
+            <select value={examScope} onChange={e => { setExamScope(e.target.value); setCurrent(0); setFlipped(false); }} style={{ ...S.input, width: "auto" }}>
+              <option value="전체">시험 범위 전체</option>
+              {upcomingExams.map(e => (
+                <option key={e.id} value={e.id}>{e.name} (D-{daysUntil(e.date)})</option>
+              ))}
+            </select>
+          )}
+          <div style={{ fontSize: 12, color: C.muted, alignSelf: "center" }}>{filteredCards.length}장</div>
+        </div>
+        <button
+          style={{ ...S.btn("primary"), width: "100%", fontSize: 15, padding: "14px" }}
+          disabled={filteredCards.length === 0}
+          onClick={() => {
+            setCurrent(0); setFlipped(false);
+            setSessionStarted(true);
+            if (onSessionChange) onSessionChange({ label: "카드 학습", progress: "1 / " + filteredCards.length });
+          }}
+        >
+          학습 시작 ({filteredCards.length}장)
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>
       <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>플래시카드</h2>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        <select value={subject} onChange={e => { setSubject(e.target.value); setCurrent(0); setFlipped(false); }} style={{ ...S.input, width: "auto" }}>
-          {subjects.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        {upcomingExams.length > 0 && (
-          <select value={examScope} onChange={e => { setExamScope(e.target.value); setCurrent(0); setFlipped(false); }} style={{ ...S.input, width: "auto" }}>
-            <option value="전체">시험 범위 전체</option>
-            {upcomingExams.map(e => (
-              <option key={e.id} value={e.id}>{e.name} (D-{daysUntil(e.date)})</option>
-            ))}
-          </select>
-        )}
-        <div style={{ fontSize: 12, color: C.muted, alignSelf: "center" }}>{filteredCards.length}장</div>
-      </div>
 
       <div
         style={{
