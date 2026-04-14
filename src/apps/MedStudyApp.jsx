@@ -3448,6 +3448,7 @@ ${textChunk}
 
       if (pageImages.length > 0) {
         // Vision mode: process pages as images in batches
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
         const BATCH_SIZE = 5;
         const totalBatches = Math.ceil(pageImages.length / BATCH_SIZE);
         setPdfStatus({ phase: `Vision 분석 중... (0/${totalBatches})`, progress: 40 });
@@ -3466,25 +3467,42 @@ ${textChunk}
           }
           parts.push({ text: PDF_PARSE_PROMPT });
           try {
-            const res = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(pdfForm.geminiApiKey.trim())}`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  generationConfig: { maxOutputTokens: 65536, temperature: 0 },
-                  contents: [{ parts }],
-                }),
+            let batchSucceeded = false;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              const res = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(pdfForm.geminiApiKey.trim())}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    generationConfig: { maxOutputTokens: 65536, temperature: 0 },
+                    contents: [{ parts }],
+                  }),
+                }
+              );
+              const json = await res.json();
+              if (!res.ok) {
+                if (attempt < 3) {
+                  console.error(`Vision batch ${batchNum} failed (${res.status}) attempt ${attempt}/3: ${json?.error?.message}`);
+                  if (res.status === 503 || res.status === 429) {
+                    await sleep(20000);
+                  }
+                  continue;
+                }
+                console.error(`Vision batch ${batchNum} failed: ${json?.error?.message}`);
+                break;
               }
-            );
-            const json = await res.json();
-            if (!res.ok) {
-              console.error(`Vision batch ${batchNum} failed: ${json?.error?.message}`);
+              const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+              const items = safeJsonArrayFromText(rawText);
+              allParsedItems.push(...items);
+              batchSucceeded = true;
+              break;
+            }
+            if (!batchSucceeded) {
+              console.error(`Vision batch ${batchNum} failed after 3 attempts.`);
               continue;
             }
-            const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-            const items = safeJsonArrayFromText(rawText);
-            allParsedItems.push(...items);
+            await sleep(3000);
           } catch (e) {
             console.error(`Vision batch ${batchNum} error:`, e);
           }
