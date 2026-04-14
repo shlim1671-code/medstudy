@@ -112,6 +112,10 @@ OPTION/CHOICE DETECTION:
 - Lettered: "ㄱ.ㄴ.ㄷ.", "가.나.다.", "a.b.c."
 - Combination: "ㄱ,ㄴ" "ㄱ,ㄷ" (보기 조합형)
 - True/False: "O/X", "맞다/틀리다"
+- Numbered word bank: a shared list of numbered terms above a group of questions
+  (e.g. "1. leukocytosis 2. thrombocytopenia 3. anemia 4. apoptosis 5. ischemia")
+  where each sub-question asks to pick one term for a blank ( ).
+  Treat the numbered list as the option set — these are OBJECTIVE.
 
 SHARED STEM (공통 지문) RULE:
 - If multiple questions share the same introductory paragraph or "다음을 읽고"
@@ -143,8 +147,12 @@ OUTPUT SCHEMA — for EACH question:
 }
 
 TYPE CLASSIFICATION:
-- "objective": has numbered/lettered choices (MCQ, T/F, 보기 조합)
-- "subjective": fill-in-the-blank, short answer, essay, labeling, drawing
+- "objective": has numbered/lettered choices (MCQ, T/F, 보기 조합), OR references
+  a shared numbered word bank anywhere in the same question block or shared stem.
+  Even if the question surface looks like fill-in-blank ( ), classify as "objective"
+  if a numbered option list is present.
+- "subjective": fill-in-the-blank or short answer with NO option list available
+  anywhere in the question block or shared stem. Essay, labeling, drawing.
 
 CONFIDENCE:
 - HIGH: answer explicitly provided in answer key or marked in the document
@@ -3251,58 +3259,6 @@ ${textChunk}
     return safeJsonArrayFromText(rawText);
   }
 
-  async function callGeminiVision(pageImages, apiKey) {
-    // Vision mode: send page images to Gemini for direct visual extraction
-    // Process in batches of 5 pages to stay within token limits
-    const BATCH_SIZE = 5;
-    const allItems = [];
-    for (let i = 0; i < pageImages.length; i += BATCH_SIZE) {
-      const batch = pageImages.slice(i, i + BATCH_SIZE);
-      const parts = [];
-      // Add each page image
-      for (const pg of batch) {
-        parts.push({
-          inline_data: {
-            mime_type: "image/png",
-            data: pg.base64,
-          },
-        });
-        parts.push({ text: `[Above is page ${pg.page}]` });
-      }
-      // Add the extraction prompt at the end
-      parts.push({ text: PDF_PARSE_PROMPT });
-
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            generationConfig: {
-              maxOutputTokens: 65536,
-              temperature: 0,
-            },
-            contents: [{ parts }],
-          }),
-        }
-      );
-      const json = await res.json();
-      if (!res.ok) {
-        const msg = json?.error?.message || `HTTP ${res.status}`;
-        console.error(`Vision batch ${Math.floor(i / BATCH_SIZE) + 1} failed: ${msg}`);
-        continue; // Skip failed batch, continue with others
-      }
-      const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-      try {
-        const items = safeJsonArrayFromText(rawText);
-        allItems.push(...items);
-      } catch (e) {
-        console.error(`Vision batch ${Math.floor(i / BATCH_SIZE) + 1} parse failed:`, e);
-      }
-    }
-    return allItems;
-  }
-
 
   async function migrateLegacy() {
     try {
@@ -3390,14 +3346,36 @@ ${textChunk}
             phase: `Vision 분석 중... (${batchNum}/${totalBatches})`,
             progress: 40 + Math.round((batchNum / totalBatches) * 40),
           });
-        }
-
-        try {
-          allParsedItems = await callGeminiVision(pageImages, pdfForm.geminiApiKey.trim());
-        } catch (e) {
-          console.error("Vision extraction failed, falling back to text:", e);
-          // Fallback to text-based extraction
-          allParsedItems = [];
+          const batch = pageImages.slice(i, i + BATCH_SIZE);
+          const parts = [];
+          for (const pg of batch) {
+            parts.push({ inline_data: { mime_type: "image/png", data: pg.base64 } });
+            parts.push({ text: `[Above is page ${pg.page}]` });
+          }
+          parts.push({ text: PDF_PARSE_PROMPT });
+          try {
+            const res = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(pdfForm.geminiApiKey.trim())}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  generationConfig: { maxOutputTokens: 65536, temperature: 0 },
+                  contents: [{ parts }],
+                }),
+              }
+            );
+            const json = await res.json();
+            if (!res.ok) {
+              console.error(`Vision batch ${batchNum} failed: ${json?.error?.message}`);
+              continue;
+            }
+            const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+            const items = safeJsonArrayFromText(rawText);
+            allParsedItems.push(...items);
+          } catch (e) {
+            console.error(`Vision batch ${batchNum} error:`, e);
+          }
         }
 
         // If vision returned nothing, fallback to text mode
