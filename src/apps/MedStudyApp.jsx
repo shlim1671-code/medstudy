@@ -3317,7 +3317,7 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
   });
   const [pdfStatus, setPdfStatus] = useState({ phase: "idle", progress: 0 });
   const [pdfResult, setPdfResult] = useState(null);
-  const [detailItem, setDetailItem] = useState(null); // null | { type: "card"|"question", item: object }
+  const [detailItem, setDetailItem] = useState(null); // null | { type: "card"|"question", index: number }
 
   const PRESETS = {
     "past-exam-heavy": { pastExam: 5, slides: 3, textbook: 1, notes: 2 },
@@ -3699,129 +3699,144 @@ ${textChunk}
 
   return (
     <div>
-      {detailItem && (
-        <div
-          onClick={() => setDetailItem(null)}
-          style={{
-            position: "fixed", inset: 0, zIndex: 400,
-            background: "rgba(0,0,0,0.6)",
-            display: "flex", alignItems: "flex-start", justifyContent: "center",
-            padding: "20px 16px", overflowY: "auto"
-          }}
-        >
+      {detailItem && (() => {
+        const list = detailItem.type === "card" ? filteredCards : filteredQ;
+        const item = list[detailItem.index];
+        if (!item) { setTimeout(() => setDetailItem(null), 0); return null; }
+
+        function goNext() {
+          const nextIdx = detailItem.index < list.length - 1
+            ? detailItem.index + 1
+            : detailItem.index - 1;
+          nextIdx >= 0 ? setDetailItem(d => ({ ...d, index: nextIdx })) : setDetailItem(null);
+        }
+
+        return (
           <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: C.surface, borderRadius: 14,
-              border: `1px solid ${C.border}`,
-              padding: "20px", width: "100%", maxWidth: 560,
-              position: "relative", maxHeight: "90vh", overflowY: "auto"
-            }}
+            onClick={() => setDetailItem(null)}
+            style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "20px 16px", overflowY: "auto" }}
           >
-            <button
-              onClick={() => setDetailItem(null)}
-              style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", fontSize: 18, color: C.muted }}
-            >✕</button>
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{ background: C.surface, borderRadius: 14, border: `1px solid ${C.border}`, padding: "20px", width: "100%", maxWidth: 560, position: "relative", maxHeight: "90vh", overflowY: "auto" }}
+            >
+              <button onClick={() => setDetailItem(null)} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", fontSize: 18, color: C.muted }}>✕</button>
 
-            {detailItem.type === "card" && (() => {
-              const c = detailItem.item;
-              const concept = c.primary_concept_id && (data.concepts || []).find(x => x.id === c.primary_concept_id);
-              return (
-                <div>
-                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>카드 상세</div>
-                  <div style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.6, marginBottom: 10 }}>{c.front}</div>
-                  <hr style={{ border: "none", borderTop: `1px solid ${C.border}`, margin: "0 0 10px" }} />
-                  <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7, marginBottom: 12 }}>{c.back}</div>
-                  {c.explanations?.quick && (
-                    <div style={{ background: C.surface2, borderRadius: 8, padding: "8px 12px", fontSize: 12, color: C.muted, marginBottom: 12 }}>
-                      {c.explanations.quick}
+              {/* prev/next 네비게이션 */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, paddingRight: 28 }}>
+                <button
+                  onClick={() => setDetailItem(d => ({ ...d, index: d.index - 1 }))}
+                  disabled={detailItem.index === 0}
+                  style={{ ...S.btn("default"), fontSize: 12, opacity: detailItem.index === 0 ? 0.3 : 1 }}
+                >← 이전</button>
+                <span style={{ fontSize: 11, color: C.muted }}>
+                  {detailItem.index + 1} / {list.length}
+                </span>
+                <button
+                  onClick={() => setDetailItem(d => ({ ...d, index: d.index + 1 }))}
+                  disabled={detailItem.index === list.length - 1}
+                  style={{ ...S.btn("default"), fontSize: 12, opacity: detailItem.index === list.length - 1 ? 0.3 : 1 }}
+                >다음 →</button>
+              </div>
+
+              {/* 카드 상세 */}
+              {detailItem.type === "card" && (() => {
+                const c = item;
+                const concept = c.primary_concept_id && (data.concepts || []).find(x => x.id === c.primary_concept_id);
+                return (
+                  <div>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>카드 상세</div>
+                    <div style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.6, marginBottom: 10 }}>{c.front}</div>
+                    <hr style={{ border: "none", borderTop: `1px solid ${C.border}`, margin: "0 0 10px" }} />
+                    <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7, marginBottom: 12 }}>{c.back}</div>
+                    {c.explanations?.quick && (
+                      <div style={{ background: C.surface2, borderRadius: 8, padding: "8px 12px", fontSize: 12, color: C.muted, marginBottom: 12 }}>{c.explanations.quick}</div>
+                    )}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+                      {c.subject && <span style={S.badge(C.muted)}>{c.subject}</span>}
+                      {(c.exam_unit || c.chapter) && <span style={S.badge(C.muted)}>{c.exam_unit || c.chapter}</span>}
+                      {c.source_type && <span style={S.badge(C.warning)}>{SOURCE_TYPE_LABELS[c.source_type] || c.source_type}</span>}
+                      {c.source_detail && <span style={S.badge(C.muted)}>{c.source_detail}</span>}
+                      {c.tier && <span style={S.badge(C.primary)}>{c.tier}</span>}
+                      {concept && <span style={S.badge(C.primary)}>{concept.primaryLabel || c.primary_concept_id}</span>}
                     </div>
-                  )}
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-                    {c.subject && <span style={S.badge(C.muted)}>{c.subject}</span>}
-                    {(c.exam_unit || c.chapter) && <span style={S.badge(C.muted)}>{c.exam_unit || c.chapter}</span>}
-                    {c.source_type && <span style={S.badge(C.warning)}>{SOURCE_TYPE_LABELS[c.source_type] || c.source_type}</span>}
-                    {c.source_detail && <span style={S.badge(C.muted)}>{c.source_detail}</span>}
-                    {c.tier && <span style={S.badge(C.primary)}>{c.tier}</span>}
-                    {concept && <span style={S.badge(C.primary)}>{concept.primaryLabel || c.primary_concept_id}</span>}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {c.status !== "archived" ? (
+                        <button style={{ ...S.btn("danger"), fontSize: 12 }} onClick={() => {
+                          updateData("cards", (data.cards || []).map(x => x.id === c.id ? { ...x, status: "archived", archivedAt: new Date().toISOString() } : x));
+                          showToast("보관됨"); goNext();
+                        }}>보관</button>
+                      ) : (
+                        <button style={{ ...S.btn("success"), fontSize: 12 }} onClick={() => {
+                          updateData("cards", (data.cards || []).map(x => x.id === c.id ? { ...x, status: undefined, archivedAt: undefined } : x));
+                          showToast("복원됨"); goNext();
+                        }}>복원</button>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {c.status !== "archived" ? (
+                );
+              })()}
+
+              {/* 문제 상세 */}
+              {detailItem.type === "question" && (() => {
+                const q = item;
+                const options = q.options || [];
+                return (
+                  <div>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>문제 상세</div>
+                    <div style={{ fontSize: 14, lineHeight: 1.8, whiteSpace: "pre-wrap", marginBottom: 14, fontFamily: FONT_HEADING }}>{q.parsed_question || q.raw_question}</div>
+                    {options.length > 0 && (
+                      <div style={{ marginBottom: 14 }}>
+                        {options.map((opt, i) => (
+                          <div key={i} style={{
+                            padding: "8px 12px", borderRadius: 8, marginBottom: 6, fontSize: 13,
+                            border: `1px solid ${opt.correct ? C.success : C.border}`,
+                            background: opt.correct ? (C.successDim || C.success + "22") : "transparent",
+                            color: opt.correct ? C.success : C.text,
+                            fontWeight: opt.correct ? 700 : 400,
+                          }}>
+                            {opt.correct && "✓ "}{i + 1}. {opt.text}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {q.explanation && (
+                      <div style={{ background: C.surface2, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.muted, lineHeight: 1.7, marginBottom: 14 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 4, color: C.text }}>해설</div>
+                        {q.explanation}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+                      {q.subject && <span style={S.badge(C.muted)}>{q.subject}</span>}
+                      {q.exam_unit && <span style={S.badge(C.muted)}>{q.exam_unit}</span>}
+                      {q.source_type && <span style={S.badge(C.warning)}>{SOURCE_TYPE_LABELS[q.source_type] || q.source_type}</span>}
+                      {q.source_detail && <span style={S.badge(C.muted)}>{q.source_detail}</span>}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {q.status !== "confirmed" && (
+                        <button style={{ ...S.btn("success"), fontSize: 12 }} onClick={() => {
+                          updateData("questions", (data.questions || []).map(x => x.id === q.id ? { ...x, status: "confirmed", confirmed_source: "user", needs_review: false } : x));
+                          showToast("확인됨"); goNext();
+                        }}>확인</button>
+                      )}
+                      {q.status !== "archived_reference" && (
+                        <button style={{ ...S.btn("default"), fontSize: 12 }} onClick={() => {
+                          updateData("questions", (data.questions || []).map(x => x.id === q.id ? { ...x, status: "archived_reference", needs_review: false } : x));
+                          showToast("보관됨"); goNext();
+                        }}>보관</button>
+                      )}
                       <button style={{ ...S.btn("danger"), fontSize: 12 }} onClick={() => {
-                        updateData("cards", (data.cards || []).map(x => x.id === c.id ? { ...x, status: "archived", archivedAt: new Date().toISOString() } : x));
-                        showToast("보관됨"); setDetailItem(null);
-                      }}>보관</button>
-                    ) : (
-                      <button style={{ ...S.btn("success"), fontSize: 12 }} onClick={() => {
-                        updateData("cards", (data.cards || []).map(x => x.id === c.id ? { ...x, status: undefined, archivedAt: undefined } : x));
-                        showToast("복원됨"); setDetailItem(null);
-                      }}>복원</button>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {detailItem.type === "question" && (() => {
-              const q = detailItem.item;
-              const options = q.options || [];
-              return (
-                <div>
-                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>문제 상세</div>
-                  <div style={{ fontSize: 14, lineHeight: 1.8, whiteSpace: "pre-wrap", marginBottom: 14, fontFamily: FONT_HEADING }}>
-                    {q.parsed_question || q.raw_question}
-                  </div>
-                  {options.length > 0 && (
-                    <div style={{ marginBottom: 14 }}>
-                      {options.map((opt, i) => (
-                        <div key={i} style={{
-                          padding: "8px 12px", borderRadius: 8, marginBottom: 6, fontSize: 13,
-                          border: `1px solid ${opt.correct ? C.success : C.border}`,
-                          background: opt.correct ? (C.successDim || C.success + "22") : "transparent",
-                          color: opt.correct ? C.success : C.text,
-                          fontWeight: opt.correct ? 700 : 400,
-                        }}>
-                          {opt.correct && "✓ "}{i + 1}. {opt.text}
-                        </div>
-                      ))}
+                        updateData("questions", (data.questions || []).filter(x => x.id !== q.id));
+                        showToast("삭제됨"); goNext();
+                      }}>삭제</button>
                     </div>
-                  )}
-                  {q.explanation && (
-                    <div style={{ background: C.surface2, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.muted, lineHeight: 1.7, marginBottom: 14 }}>
-                      <div style={{ fontWeight: 600, marginBottom: 4, color: C.text }}>해설</div>
-                      {q.explanation}
-                    </div>
-                  )}
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-                    {q.subject && <span style={S.badge(C.muted)}>{q.subject}</span>}
-                    {q.exam_unit && <span style={S.badge(C.muted)}>{q.exam_unit}</span>}
-                    {q.source_type && <span style={S.badge(C.warning)}>{SOURCE_TYPE_LABELS[q.source_type] || q.source_type}</span>}
-                    {q.source_detail && <span style={S.badge(C.muted)}>{q.source_detail}</span>}
                   </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {q.status !== "confirmed" && (
-                      <button style={{ ...S.btn("success"), fontSize: 12 }} onClick={() => {
-                        updateData("questions", (data.questions || []).map(x => x.id === q.id ? { ...x, status: "confirmed", confirmed_source: "user", needs_review: false } : x));
-                        showToast("확인됨"); setDetailItem(null);
-                      }}>확인</button>
-                    )}
-                    {q.status !== "archived_reference" && (
-                      <button style={{ ...S.btn("default"), fontSize: 12 }} onClick={() => {
-                        updateData("questions", (data.questions || []).map(x => x.id === q.id ? { ...x, status: "archived_reference", needs_review: false } : x));
-                        showToast("보관됨"); setDetailItem(null);
-                      }}>보관</button>
-                    )}
-                    <button style={{ ...S.btn("danger"), fontSize: 12 }} onClick={() => {
-                      updateData("questions", (data.questions || []).filter(x => x.id !== q.id));
-                      showToast("삭제됨"); setDetailItem(null);
-                    }}>삭제</button>
-                  </div>
-                </div>
-              );
-            })()}
+                );
+              })()}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>관리</h2>
 
@@ -3863,7 +3878,7 @@ ${textChunk}
                   <div style={{ fontSize: 14, marginTop: 2 }}>{c.front}</div>
                   <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{c.back}</div>
                 </div>
-                <button style={{ ...S.btn("default"), fontSize: 11 }} onClick={() => setDetailItem({ type: "card", item: c })}>상세</button>
+                <button style={{ ...S.btn("default"), fontSize: 11 }} onClick={() => setDetailItem({ type: "card", index: filteredCards.indexOf(c) })}>상세</button>
                 {c.status === "archived" ? (
                   <button style={{ ...S.btn("success"), fontSize: 11 }} onClick={() => {
                     updateData("cards", (data.cards || []).map(x =>
@@ -3915,7 +3930,7 @@ ${textChunk}
                     {q.review_reason && <div style={{ fontSize: 11, color: C.warning, marginTop: 2 }}>{q.review_reason}</div>}
                   </div>
                   <div style={{ display: "flex", gap: 4, flexShrink: 0, flexDirection: "column", alignItems: "flex-end" }}>
-                    <button style={{ ...S.btn("default"), fontSize: 11 }} onClick={() => setDetailItem({ type: "question", item: q })}>상세</button>
+                    <button style={{ ...S.btn("default"), fontSize: 11 }} onClick={() => setDetailItem({ type: "question", index: filteredQ.indexOf(q) })}>상세</button>
                     {q.status !== "confirmed" && (
                       <button style={{ ...S.btn("success"), fontSize: 11 }} onClick={() => confirmQuestion(q.id)}>확인</button>
                     )}
