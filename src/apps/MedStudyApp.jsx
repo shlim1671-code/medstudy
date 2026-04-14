@@ -128,6 +128,7 @@ OPTION/CHOICE DETECTION:
   (e.g. "1. leukocytosis 2. thrombocytopenia 3. anemia 4. apoptosis 5. ischemia")
   where each sub-question asks to pick one term for a blank ( ).
   Treat the numbered list as the option set — these are OBJECTIVE.
+- IMPORTANT: For multiple choice questions, the 'question' field must contain ONLY the question stem and any shared passage/context. Do NOT include the numbered options (1. 2. 3. 4. 5.) in the 'question' field. The options belong only in the 'options' array.
 
 SHARED STEM (공통 지문) RULE:
 - If multiple questions share the same introductory paragraph or "다음을 읽고"
@@ -3508,13 +3509,28 @@ ${textChunk}
           }
         }
 
-        // If vision returned nothing, fallback to text mode
-        if (allParsedItems.length === 0 && fullText.trim()) {
-          console.warn("[MedStudy] Vision returned 0 items, falling back to text extraction");
+        // Vision completion fallback: also run text mode and merge non-duplicates
+        if (fullText.trim()) {
+          console.warn("[MedStudy] Running text extraction fallback after vision");
           setPdfStatus({ phase: "텍스트 폴백 분석 중...", progress: 55 });
           const CHUNK_SIZE = 15000;
+          const existingQuestionPrefixes = new Set(
+            allParsedItems
+              .map((item) => (item?.question || "").slice(0, 30))
+              .filter(Boolean)
+          );
+          const pushUniqueFallbackItems = (items = []) => {
+            for (const item of items) {
+              const prefix = (item?.question || "").slice(0, 30);
+              if (prefix && existingQuestionPrefixes.has(prefix)) continue;
+              if (prefix) existingQuestionPrefixes.add(prefix);
+              allParsedItems.push(item);
+            }
+          };
+
           if (fullText.length <= CHUNK_SIZE) {
-            allParsedItems = await callGemini(fullText, pdfForm.geminiApiKey.trim());
+            const items = await callGemini(fullText, pdfForm.geminiApiKey.trim());
+            pushUniqueFallbackItems(items);
           } else {
             const paragraphs = fullText.split(/\n\n+/);
             const chunks = [];
@@ -3535,7 +3551,7 @@ ${textChunk}
               });
               try {
                 const items = await callGemini(chunks[i], pdfForm.geminiApiKey.trim());
-                allParsedItems.push(...items);
+                pushUniqueFallbackItems(items);
               } catch (e) {
                 console.error(`Text chunk ${i + 1} failed:`, e);
               }
