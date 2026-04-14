@@ -3343,7 +3343,7 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
   async function callGemini(textChunk, apiKey) {
     // Text-only fallback mode
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3467,7 +3467,7 @@ ${textChunk}
           parts.push({ text: PDF_PARSE_PROMPT });
           try {
             const res = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(pdfForm.geminiApiKey.trim())}`,
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(pdfForm.geminiApiKey.trim())}`,
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
