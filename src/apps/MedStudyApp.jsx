@@ -724,6 +724,8 @@ function CardImage({ image_url, image_present, image_ref }) {
 // ─────────────────────────────────────────
 export default function MedStudyApp() {
   const [page, setPage] = useState("home");
+  const [sessionState, setSessionState] = useState(null); // null | { label: string }
+  const [exitSignal, setExitSignal] = useState(0);
   const [data, setData] = useState({
     cards: [], questions: [], professors: [], srs: {},
     reviewLog: [], exams: [], concepts: [], confusionClusters: [], hasLegacy: false,
@@ -922,10 +924,18 @@ export default function MedStudyApp() {
   const lastMileMode = getLastMileMode(upcomingExams);
   const dueCount = getDueCards(lastMileMode).length;
 
-  const pageProps = { data, updateData, logReview, updateSrs, getDueCards, getUpcomingExams, showToast, navigate: setPage, lastMileMode, refreshClusters, S, T, C };
+  const pageProps = { data, updateData, logReview, updateSrs, getDueCards, getUpcomingExams, showToast, navigate: setPage, lastMileMode, refreshClusters, onSessionChange: setSessionState, exitSessionSignal: exitSignal, S, T, C };
 
   const Pages = { home: HomePage, review: ReviewPage, quiz: QuizPage, flashcard: FlashcardPage, plan: PlanPage, stats: StatsPage, concepts: ConceptPage, manage: ManagePage, decision: DecisionTrainingPage, compress: CompressionPage };
   const PageComp = Pages[page] || HomePage;
+  const effectiveSession = sessionState || (page === "flashcard" ? { label: "카드 학습" } : null);
+
+
+  useEffect(() => {
+    if (exitSignal > 0 && page === "flashcard") {
+      setPage("home");
+    }
+  }, [exitSignal, page]);
 
   if (loading) {
     return (
@@ -937,26 +947,90 @@ export default function MedStudyApp() {
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: FONT_BODY, fontSize: 14 }}>
-      {/* Header */}
-      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ fontWeight: 700, fontSize: 16, color: C.text, letterSpacing: "-0.01em", fontFamily: FONT_HEADING }}>
-          MedStudy <span style={{ color: C.primary }}>AI</span>
-        </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <button onClick={toggleTheme} style={{
-            background: "none", border: "none", cursor: "pointer",
-            fontSize: 18, padding: "4px 6px", borderRadius: 6, color: C.text,
-          }}>
-            {theme === "light" ? "🌙" : "☀️"}
+      {effectiveSession && (
+        <div style={{
+          position: "sticky", top: 0, zIndex: 100,
+          background: C.surface, borderBottom: `1px solid ${C.border}`,
+          padding: "10px 20px",
+          display: "flex", justifyContent: "space-between", alignItems: "center"
+        }}>
+          <div style={{ fontWeight: 700, fontSize: 15, fontFamily: FONT_HEADING }}>
+            MedStudy <span style={{ color: C.primary }}>AI</span>
+            <span style={{ fontSize: 12, color: C.muted, fontWeight: 400, marginLeft: 10 }}>
+              {effectiveSession.label}
+            </span>
+          </div>
+          <button
+            onClick={() => { setExitSignal(s => s + 1); setSessionState(null); }}
+            style={{
+              padding: "6px 14px", borderRadius: 8,
+              border: `1px solid ${C.border}`,
+              background: "none", cursor: "pointer",
+              color: C.text, fontSize: 13
+            }}
+          >
+            ✕ 나가기
           </button>
-          {dueCount > 0 && (
-            <span style={S.badge(C.warning)}>{dueCount} 복습</span>
-          )}
-          {urgentExam && (
-            <span style={S.badge(C.danger)}>D-{daysUntil(urgentExam.date)} {urgentExam.name}</span>
-          )}
         </div>
-      </div>
+      )}
+
+      {!effectiveSession && (
+        <>
+          {/* Header */}
+          <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: C.text, letterSpacing: "-0.01em", fontFamily: FONT_HEADING }}>
+              MedStudy <span style={{ color: C.primary }}>AI</span>
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <button onClick={toggleTheme} style={{
+                background: "none", border: "none", cursor: "pointer",
+                fontSize: 18, padding: "4px 6px", borderRadius: 6, color: C.text,
+              }}>
+                {theme === "light" ? "🌙" : "☀️"}
+              </button>
+              {dueCount > 0 && (
+                <span style={S.badge(C.warning)}>{dueCount} 복습</span>
+              )}
+              {urgentExam && (
+                <span style={S.badge(C.danger)}>D-{daysUntil(urgentExam.date)} {urgentExam.name}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Nav — primary actions | secondary tools */}
+          <div style={{ display: "flex", overflowX: "auto", background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 4px" }}>
+            {navItems.map((n, i) => {
+              const isPrimary = navPrimary.some(p => p.id === n.id);
+              const isActive  = page === n.id;
+              // separator before first secondary item
+              const showSep = i > 0 && !isPrimary && navPrimary.some(p => p.id === navItems[i - 1].id);
+              return (
+                <div key={n.id} style={{ display: "flex", alignItems: "stretch" }}>
+                  {showSep && (
+                    <div style={{ width: 1, background: C.border, margin: "6px 0", alignSelf: "stretch" }} />
+                  )}
+                  <button
+                    onClick={() => setPage(n.id)}
+                    style={{
+                      padding: "10px 14px",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: isActive ? C.primary : isPrimary ? C.text : C.muted,
+                      fontWeight: isActive ? 700 : isPrimary ? 500 : 400,
+                      borderBottom: `2px solid ${isActive ? C.primary : "transparent"}`,
+                      fontSize: 13,
+                      whiteSpace: "nowrap",
+                      opacity: !isPrimary && !isActive ? 0.8 : 1,
+                    }}>
+                    {n.label}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {/* Legacy Banner */}
       {data.hasLegacy && (
@@ -972,38 +1046,6 @@ export default function MedStudyApp() {
         </div>
       )}
 
-      {/* Nav — primary actions | secondary tools */}
-      <div style={{ display: "flex", overflowX: "auto", background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 4px" }}>
-        {navItems.map((n, i) => {
-          const isPrimary = navPrimary.some(p => p.id === n.id);
-          const isActive  = page === n.id;
-          // separator before first secondary item
-          const showSep = i > 0 && !isPrimary && navPrimary.some(p => p.id === navItems[i - 1].id);
-          return (
-            <div key={n.id} style={{ display: "flex", alignItems: "stretch" }}>
-              {showSep && (
-                <div style={{ width: 1, background: C.border, margin: "6px 0", alignSelf: "stretch" }} />
-              )}
-              <button
-                onClick={() => setPage(n.id)}
-                style={{
-                  padding: "10px 14px",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: isActive ? C.primary : isPrimary ? C.text : C.muted,
-                  fontWeight: isActive ? 700 : isPrimary ? 500 : 400,
-                  borderBottom: `2px solid ${isActive ? C.primary : "transparent"}`,
-                  fontSize: 13,
-                  whiteSpace: "nowrap",
-                  opacity: !isPrimary && !isActive ? 0.8 : 1,
-                }}>
-                {n.label}
-              </button>
-            </div>
-          );
-        })}
-      </div>
 
       {/* Content */}
       <div style={{ maxWidth: 800, margin: "0 auto", padding: 20 }}>
@@ -1374,13 +1416,20 @@ function HomePage({ data, getDueCards, getUpcomingExams, navigate, lastMileMode,
 // ─────────────────────────────────────────
 // ReviewPage — Phase 4: Hybrid Priority + Last-Mile
 // ─────────────────────────────────────────
-function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpcomingExams, lastMileMode, refreshClusters, navigate, S, T, C }) {
+function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpcomingExams, lastMileMode, refreshClusters, navigate, onSessionChange, exitSessionSignal, S, T, C }) {
   const [sessionCards, setSessionCards] = useState(null);
   const [current, setCurrent] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [startTime, setStartTime] = useState(null);
   const [sessionLog, setSessionLog] = useState([]);
   const [selectedMode, setSelectedMode] = useState(lastMileMode || "normal");
+
+  useEffect(() => {
+    if (exitSessionSignal > 0 && sessionCards !== null) {
+      setSessionCards(null);
+      if (onSessionChange) onSessionChange(null);
+    }
+  }, [exitSessionSignal]);
   const upcomingExams = getUpcomingExams();
   const nearestExam = upcomingExams[0] || null;
   const nearestDays = nearestExam ? daysUntil(nearestExam.date) : null;
@@ -1395,6 +1444,7 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
     const due = getDueCards(mode);
     if (due.length === 0) { showToast("복습할 카드 없음", "error"); return; }
     setSessionCards(due); setCurrent(0); setFlipped(false);
+    if (onSessionChange) onSessionChange({ label: "복습 중" });
     setStartTime(Date.now()); setSessionLog([]);
   }
   function reviewGrade(g) {
@@ -1405,6 +1455,7 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
     updateSrs(card.id, g);
     logReview({ cardId: card.id, questionId: null, correct, mode: "review", responseTimeSec });
     setSessionLog(prev => [...prev, { card, grade: g, correct }]);
+    if (current + 1 >= sessionCards.length && onSessionChange) onSessionChange(null);
     setCurrent(c => c + 1); setFlipped(false); setStartTime(Date.now());
   }
   const dueCount = getDueCards(selectedMode !== "normal" ? selectedMode : null).length;
@@ -1763,7 +1814,7 @@ function FlashcardPage({ data, updateSrs, logReview, getUpcomingExams, S, T, C }
 // ─────────────────────────────────────────
 // QuizPage — Phase 3: 3모드 + review-log
 // ─────────────────────────────────────────
-function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, S, T, C }) {
+function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, onSessionChange, exitSessionSignal, S, T, C }) {
   const [phase, setPhase] = useState("setup");
   const [config, setConfig] = useState({ mode: "question", subject: "전체", examScope: "전체", scopeType: "all", count: 10 });
   const [items, setItems] = useState([]);
@@ -1772,6 +1823,13 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, S, 
   const [revealed, setRevealed] = useState(false);
   const [sessionResults, setSessionResults] = useState([]);
   const [startTime, setStartTime] = useState(null);
+
+  useEffect(() => {
+    if (exitSessionSignal > 0 && phase === "running") {
+      setPhase("setup");
+      if (onSessionChange) onSessionChange(null);
+    }
+  }, [exitSessionSignal]);
 
   const upcomingExams = getUpcomingExams();
   const confirmedQ = (data.questions || []).filter(q =>
@@ -1824,6 +1882,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, S, 
     setSessionResults([]);
     setStartTime(Date.now());
     setPhase("running");
+    if (onSessionChange) onSessionChange({ label: "퀴즈 중" });
   }
 
   function handleCardReveal() {
@@ -1854,6 +1913,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, S, 
   function nextItem() {
     if (current + 1 >= items.length) {
       setPhase("results");
+      if (onSessionChange) onSessionChange(null);
     } else {
       setCurrent(c => c + 1);
       setSelected(null);
