@@ -3341,35 +3341,56 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
     showToast("저장됨");
   }
 
+  async function retryWithBackoff(fn, { maxRetries = 4, baseDelay = 10000, retryOn = [503, 429] } = {}) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const status = err?.status || err?.httpStatus;
+        const isRetryable = retryOn.some(code =>
+          err.message?.includes(`${code}`) || status === code
+        );
+        if (!isRetryable || attempt === maxRetries) throw err;
+        const delay = baseDelay * Math.pow(2, attempt) + Math.random() * baseDelay * 0.5;
+        console.warn(`[MedStudy] Gemini ${status || 'error'}, retry ${attempt + 1}/${maxRetries} in ${Math.round(delay / 1000)}s`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+
   async function callGemini(textChunk, apiKey) {
-    // Text-only fallback mode
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          generationConfig: {
-            maxOutputTokens: 65536,
-            temperature: 0,
-          },
-          contents: [{
-            parts: [{ text: `${PDF_PARSE_PROMPT}
+    return retryWithBackoff(async () => {
+      // Text-only fallback mode
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            generationConfig: {
+              maxOutputTokens: 65536,
+              temperature: 0,
+            },
+            contents: [{
+              parts: [{ text: `${PDF_PARSE_PROMPT}
 
 === RAW EXAM TEXT START ===
 ${textChunk}
 === RAW EXAM TEXT END ===` }],
-          }],
-        }),
+            }],
+          }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        const msg = json?.error?.message || `HTTP ${res.status}`;
+        const err = new Error(`Gemini API 오류: ${msg}`);
+        err.httpStatus = res.status;
+        throw err;
       }
-    );
-    const json = await res.json();
-    if (!res.ok) {
-      const msg = json?.error?.message || `HTTP ${res.status}`;
-      throw new Error(`Gemini API 오류: ${msg}`);
-    }
-    const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-    return safeJsonArrayFromText(rawText);
+      const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+      return safeJsonArrayFromText(rawText);
+    }, { maxRetries: 4, baseDelay: 10000 });
   }
 
 
@@ -3449,8 +3470,7 @@ ${textChunk}
 
       if (pageImages.length > 0) {
         // Vision mode: process pages as images in batches
-        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-        const BATCH_SIZE = 5;
+        const BATCH_SIZE = 3;
         const totalBatches = Math.ceil(pageImages.length / BATCH_SIZE);
         setPdfStatus({ phase: `Vision 분석 중... (0/${totalBatches})`, progress: 40 });
 
@@ -3467,9 +3487,9 @@ ${textChunk}
             parts.push({ text: `[Above is page ${pg.page}]` });
           }
           parts.push({ text: PDF_PARSE_PROMPT });
+          let json;
           try {
-            let batchSucceeded = false;
-            for (let attempt = 1; attempt <= 3; attempt++) {
+            json = await retryWithBackoff(async () => {
               const res = await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(pdfForm.geminiApiKey.trim())}`,
                 {
@@ -3481,31 +3501,26 @@ ${textChunk}
                   }),
                 }
               );
-              const json = await res.json();
+              const data = await res.json();
               if (!res.ok) {
-                if (attempt < 3) {
-                  console.error(`Vision batch ${batchNum} failed (${res.status}) attempt ${attempt}/3: ${json?.error?.message}`);
-                  if (res.status === 503 || res.status === 429) {
-                    await sleep(20000);
-                  }
-                  continue;
-                }
-                console.error(`Vision batch ${batchNum} failed: ${json?.error?.message}`);
-                break;
+                const msg = data?.error?.message || `HTTP ${res.status}`;
+                const err = new Error(`Vision batch failed: ${msg}`);
+                err.httpStatus = res.status;
+                throw err;
               }
-              const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-              const items = safeJsonArrayFromText(rawText);
-              allParsedItems.push(...items);
-              batchSucceeded = true;
-              break;
-            }
-            if (!batchSucceeded) {
-              console.error(`Vision batch ${batchNum} failed after 3 attempts.`);
-              continue;
-            }
-            await sleep(3000);
+              return data;
+            }, { maxRetries: 4, baseDelay: 10000 });
           } catch (e) {
-            console.error(`Vision batch ${batchNum} error:`, e);
+            console.error(`Vision batch ${Math.floor(i / BATCH_SIZE) + 1} failed after retries: ${e.message}`);
+            continue; // Skip failed batch after all retries exhausted
+          }
+          const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+          const items = safeJsonArrayFromText(rawText);
+          allParsedItems.push(...items);
+
+          // Inter-batch cooldown to avoid rate limits
+          if (i + BATCH_SIZE < pageImages.length) {
+            await new Promise(r => setTimeout(r, 8000 + Math.random() * 4000));
           }
         }
 
