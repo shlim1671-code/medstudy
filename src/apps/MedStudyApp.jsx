@@ -2012,6 +2012,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, onS
   const [revealed, setRevealed] = useState(false);
   const [sessionResults, setSessionResults] = useState([]);
   const [startTime, setStartTime] = useState(null);
+  const [subjectiveInput, setSubjectiveInput] = useState("");
 
   useEffect(() => {
     if (exitSessionSignal > 0 && phase === "running") {
