@@ -2912,7 +2912,7 @@ function ImageLinkPanel({ showToast, updateData, S, C }) {
 // ─────────────────────────────────────────
 // CardInjector
 // ─────────────────────────────────────────
-function CardInjector({ showToast, exams, professors, S, C }) {
+function CardInjector({ showToast, updateData, exams, professors, S, C }) {
   const blank = {
     subject: "", chapter: "", front: "", back: "",
     templateType: "anatomy", conceptId: "", tier: "active",
