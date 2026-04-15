@@ -4765,7 +4765,7 @@ function ConceptPage({ data, updateData, showToast, S, T, C }) {
     });
 
     return () => sim.stop();
-  }, [view, mindmapFiltered.length, mapSubject]);
+  }, [view, mindmapFiltered.length, mapSubject, mindmapFiltered.map(c => c.id + (c.primaryLabel || "") + (c.linkedConceptIds || []).join(",")).join("|")]);
 
   function openCreate() {
     setForm(makeBlankConcept());
