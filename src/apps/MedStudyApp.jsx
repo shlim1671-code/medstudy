@@ -4466,15 +4466,15 @@ ${textChunk}
 
 
       {tab === "inject_card" && (
-        <CardInjector showToast={showToast} exams={data.exams || []}
+        <CardInjector showToast={showToast} updateData={updateData} exams={data.exams || []}
           professors={data.professors || []} S={S} C={C} />
       )}
       {tab === "inject_question" && (
-        <QuestionInjector showToast={showToast} exams={data.exams || []}
+        <QuestionInjector showToast={showToast} updateData={updateData} exams={data.exams || []}
           professors={data.professors || []} S={S} C={C} />
       )}
-      {tab === "json_bulk" && <JsonBulkPanel showToast={showToast} S={S} C={C} />}
-      {tab === "image_link" && <ImageLinkPanel showToast={showToast} S={S} C={C} />}
+      {tab === "json_bulk" && <JsonBulkPanel showToast={showToast} updateData={updateData} S={S} C={C} />}
+      {tab === "image_link" && <ImageLinkPanel showToast={showToast} updateData={updateData} S={S} C={C} />}
 
     </div>
   );
