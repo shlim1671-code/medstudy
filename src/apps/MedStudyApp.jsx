@@ -3808,15 +3808,18 @@ ${textChunk}
           }
         }
 
-        if ((item.type || "").toLowerCase() === "objective") {
-          if (!normalizedRawQuestion || existingQ.has(normalizedRawQuestion)) return;
-          const canonicalAnswer = item.canonicalAnswer ?? null;
+        if (!normalizedRawQuestion) return;
+        const canonicalAnswer = item.canonicalAnswer ?? null;
+        const isObjective = (item.type || "").toLowerCase() === "objective";
+
+        if (!existingQ.has(normalizedRawQuestion)) {
           newQuestions.push({
             id: uid(),
             raw_question: rawQuestion,
             parsed_question: rawQuestion,
-            options: Array.isArray(item.options) ? item.options : [],
+            options: isObjective ? (Array.isArray(item.options) ? item.options : []) : [],
             canonicalAnswer,
+            subjectiveType: !isObjective,
             status: normalizeConfidence(item.confidence) === "none" ? "unverified" : "confirmed",
             confidence: normalizeConfidence(item.confidence),
             confirmed_source: "ai_user",
@@ -3836,16 +3839,13 @@ ${textChunk}
             createdAt: new Date().toISOString(),
           });
           existingQ.add(normalizedRawQuestion);
-          return;
         }
 
-        if ((item.type || "").toLowerCase() === "subjective") {
-          const front = normalizedRawQuestion;
-          if (!front || existingC.has(front)) return;
+        if (!existingC.has(normalizedRawQuestion)) {
           newCards.push({
             id: uid(),
-            front,
-            back: item.canonicalAnswer || "",
+            front: normalizedRawQuestion,
+            back: canonicalAnswer || "(정답 미확인)",
             subject: pdfForm.subjectKo,
             chapter: "",
             templateType: "general",
@@ -3859,7 +3859,7 @@ ${textChunk}
             ingestion_batch_id: ingestionBatchId,
             createdAt: new Date().toISOString(),
           });
-          existingC.add(front);
+          existingC.add(normalizedRawQuestion);
         }
       });
 
