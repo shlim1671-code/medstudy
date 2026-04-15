@@ -2110,8 +2110,34 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, onS
       setCurrent(c => c + 1);
       setSelected(null);
       setRevealed(false);
+      setSubjectiveInput("");
       setStartTime(Date.now());
     }
+  }
+
+  function handleSubjectiveSubmit() {
+    if (!subjectiveInput.trim()) return;
+    const item = items[current];
+    const canonical = (item.data.canonicalAnswer || "").trim().toLowerCase();
+    const userAnswer = subjectiveInput.trim().toLowerCase();
+    const correct = canonical !== "" && userAnswer === canonical;
+    const responseTimeSec = Math.round((Date.now() - (startTime || Date.now())) / 1000);
+    updateSrs(item.data.id, correct ? 2 : 0);
+    logReview({ cardId: null, questionId: item.data.id, correct, mode: "quiz", responseTimeSec });
+    setSessionResults(prev => [...prev, { item, correct, subjectiveInput: subjectiveInput.trim() }]);
+    setRevealed(true);
+  }
+
+  function handleSubjectiveOverride() {
+    setSessionResults(prev => {
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      if (last && !last.correct) {
+        updated[updated.length - 1] = { ...last, correct: true, overridden: true };
+        updateSrs(last.item.data.id, 2);
+      }
+      return updated;
+    });
   }
 
   const previewCount = buildPool(config).length;
