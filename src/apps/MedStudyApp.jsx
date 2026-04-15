@@ -2289,6 +2289,59 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, onS
             </div>
           )}
         </div>
+      ) : item.data.subjectiveType ? (
+        <div>
+          <div style={S.card}>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>{formatSource(item.data)}</div>
+            <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.8, whiteSpace: "pre-wrap", marginBottom: 16, fontFamily: FONT_HEADING, letterSpacing: "-0.01em" }}>
+              {item.data.parsed_question || item.data.raw_question}
+            </div>
+            <CardImage image_url={item.data.image_url} image_present={item.data.image_present} image_ref={item.data.image_ref} />
+            {!revealed && (
+              <textarea
+                value={subjectiveInput}
+                onChange={e => setSubjectiveInput(e.target.value)}
+                placeholder="답을 입력하세요..."
+                rows={3}
+                style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, color: C.text, fontSize: 14, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box", marginTop: 8 }}
+              />
+            )}
+            {revealed && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ padding: "10px 14px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, fontSize: 14, marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>내 답안</span>
+                  {sessionResults[sessionResults.length - 1]?.subjectiveInput || subjectiveInput}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {revealed && item.data.canonicalAnswer && (
+            <div style={{ ...S.card, borderLeft: `3px solid ${C.primary}`, marginTop: 0, padding: "8px 14px" }}>
+              <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>표준 정답</div>
+              <div style={{ fontSize: 13, color: C.text }}>{item.data.canonicalAnswer}</div>
+            </div>
+          )}
+          {revealed && item.data.explanations && (item.data.explanations.quick || item.data.explanations.professor) && (
+            <div style={{ ...S.card, borderLeft: `3px solid ${C.primary}`, marginTop: 0 }}>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>해설</div>
+              <div style={{ fontSize: 13 }}>{item.data.explanations.quick || item.data.explanations.professor}</div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            {!revealed ? (
+              <button style={{ ...S.btn("success"), flex: 1 }} onClick={handleSubjectiveSubmit} disabled={!subjectiveInput.trim()}>제출</button>
+            ) : (
+              <>
+                {sessionResults[sessionResults.length - 1] && !sessionResults[sessionResults.length - 1].correct && !sessionResults[sessionResults.length - 1].overridden && (
+                  <button style={{ ...S.btn("warning"), flex: 1 }} onClick={handleSubjectiveOverride}>인정답안 처리</button>
+                )}
+                <button style={{ ...S.btn(), flex: 1 }} onClick={nextItem}>다음 →</button>
+              </>
+            )}
+          </div>
+        </div>
       ) : (
         <div>
           <div style={S.card}>
