@@ -3276,7 +3276,7 @@ function QuestionInjector({ showToast, updateData, exams, professors, S, C }) {
       createdAt: new Date().toISOString(),
     };
 
-    await sSet(SK.questions, [...questions, q]);
+    updateData("questions", [...questions, q]);
     const msg = duplicateLevel === "frequent_occurrence"
       ? `문제 저장됨 ✓ (frequent_occurrence: 중요도 반영)`
       : duplicateLevel === "same_concept_diff_intent"
