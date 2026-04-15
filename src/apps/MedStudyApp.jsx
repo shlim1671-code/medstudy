@@ -3652,18 +3652,16 @@ ${textChunk}
                 throw err;
               }
               return data;
-            }, { maxRetries: 4, baseDelay: 10000, retryOn: [429, 500, 503] }); // Fix: include 500 (bug #10)
+            }, { maxRetries: 4, baseDelay: 10000, retryOn: [429, 500, 503] });
           } catch (e) {
             console.error(`Vision batch ${Math.floor(i / BATCH_SIZE) + 1} failed after retries: ${e.message}`);
-            continue; // Skip failed batch after all retries exhausted
+            continue;
           }
           const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-          // Fix: finishReason check — detect truncated responses (bug #8)
           const finishReason = json?.candidates?.[0]?.finishReason;
           if (finishReason && finishReason !== "STOP") {
             console.warn(`[MedStudy] Vision batch ${batchNum} finishReason=${finishReason} — response may be truncated`);
           }
-          // Fix: wrap parse in try/catch so a single bad batch doesn't abort the whole pipeline (bug #3)
           let items = [];
           try {
             items = safeJsonArrayFromText(rawText);
@@ -3678,19 +3676,19 @@ ${textChunk}
           }
         }
 
-        // Vision completion fallback: only when vision produced nothing (bug #6 — was always running)
+        // Vision completion fallback: only when vision produced nothing
         if (fullText.trim() && allParsedItems.length === 0) {
           console.warn("[MedStudy] Running text extraction fallback after vision");
           setPdfStatus({ phase: "텍스트 폴백 분석 중...", progress: 55 });
           const CHUNK_SIZE = 15000;
           const existingQuestionPrefixes = new Set(
             allParsedItems
-              .map((item) => (item?.raw_question || "").slice(0, 30)) // Fix: was item?.question (bug #7)
+              .map((item) => (item?.raw_question || "").slice(0, 30))
               .filter(Boolean)
           );
           const pushUniqueFallbackItems = (items = []) => {
             for (const item of items) {
-              const prefix = (item?.raw_question || "").slice(0, 30); // Fix: was item?.question (bug #7)
+              const prefix = (item?.raw_question || "").slice(0, 30);
               if (prefix && existingQuestionPrefixes.has(prefix)) continue;
               if (prefix) existingQuestionPrefixes.add(prefix);
               allParsedItems.push(item);
@@ -3765,7 +3763,6 @@ ${textChunk}
       const parsedItems = postProcessParsedItems(allParsedItems);
       console.log(`[MedStudy] 후처리: ${allParsedItems.length}개 → ${parsedItems.length}개 (${allParsedItems.length - parsedItems.length}개 그룹 헤더 제거)`);
 
-      // Fix: explicit failure when nothing was extracted (bug #9)
       if (parsedItems.length === 0) {
         setPdfStatus({ phase: "추출 실패", progress: 0 });
         showToast("추출된 문제/카드가 없습니다. PDF 내용을 확인하거나 Gemini API 키를 점검하세요.", "error");
@@ -3785,32 +3782,27 @@ ${textChunk}
       parsedItems.forEach(item => {
         const rawQuestion = item.raw_question || "";
         const normalizedRawQuestion = normalize(rawQuestion);
-        // Normalize: Gemini might return array like ["p007_i01", "p007_i02"]
         let rawImageRef = item.image_ref;
         if (Array.isArray(rawImageRef)) {
           rawImageRef = rawImageRef.join(", ");
         }
-        // Handle single ref or comma-separated multi-ref from Gemini
         let imageRef = rawImageRef || null;
         let mappedImage = null;
         if (imageRef) {
-          // Try direct lookup first
           mappedImage = imageMapping[imageRef];
           if (!mappedImage) {
-            // Split by comma/space and try each ref
             const refs = imageRef.split(/[,\s]+/).map(r => r.trim()).filter(Boolean);
             for (const ref of refs) {
               const found = imageMapping[ref];
               if (found?.url) {
                 mappedImage = found;
-                imageRef = ref; // Use the first successfully matched ref
+                imageRef = ref;
                 break;
               }
             }
           }
           if (!mappedImage?.url) {
             unresolvedImageRefs += 1;
-            // 매핑 실패 시 image_present를 false로 — image_ref는 보존
             item.image_present = false;
           }
         }
@@ -3827,9 +3819,9 @@ ${textChunk}
             status: normalizeConfidence(item.confidence) === "none" ? "unverified" : "confirmed",
             confidence: normalizeConfidence(item.confidence),
             confirmed_source: "ai_user",
-            question_intent: normalizeQuestionIntent(item.question_intent), // Fix: was hardcoded "definition" (bug #4)
+            question_intent: normalizeQuestionIntent(item.question_intent),
             occurrence_key: [subjectSlug, pdfForm.exam_unit.trim(), pdfForm.source_type].join("|"),
-            source_signature: ["", normalizeQuestionIntent(item.question_intent), (canonicalAnswer || "").slice(0, 40)].join("||"), // Fix: was hardcoded "definition" (bug #5)
+            source_signature: ["", normalizeQuestionIntent(item.question_intent), (canonicalAnswer || "").slice(0, 40)].join("||"),
             question_family_id: item.question_family_id || null,
             explanations: { quick: "", professor: null, textbook: null, extra: null },
             image_present: !!item.image_present,
