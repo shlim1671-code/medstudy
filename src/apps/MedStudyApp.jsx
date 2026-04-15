@@ -2984,7 +2984,7 @@ function CardInjector({ showToast, updateData, exams, professors, S, C }) {
       createdAt: new Date().toISOString(),
     };
 
-    await sSet(SK.cards, [...cards, card]);
+    updateData("cards", [...cards, card]);
     showToast("카드 저장됨 ✓");
     setForm(blank);
   }
