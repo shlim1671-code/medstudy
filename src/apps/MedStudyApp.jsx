@@ -3122,7 +3122,7 @@ function CardInjector({ showToast, updateData, exams, professors, S, C }) {
 // ─────────────────────────────────────────
 // QuestionInjector
 // ─────────────────────────────────────────
-function QuestionInjector({ showToast, exams, professors, S, C }) {
+function QuestionInjector({ showToast, updateData, exams, professors, S, C }) {
   const blank = {
     subject: "", type: "mcq", rawQuestion: "", parsedQuestion: "",
     options: [{ text: "", correct: false }, { text: "", correct: false }, { text: "", correct: false }, { text: "", correct: false }, { text: "", correct: false }],
