@@ -2249,6 +2249,13 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, onS
               <div style={{ fontSize: 13, marginTop: 2 }}>
                 {r.item.type === "card" ? r.item.data.front : (r.item.data.parsed_question || r.item.data.raw_question || "").slice(0, 90)}
               </div>
+              {r.item.type === "question" && r.item.data.subjectiveType && (
+                <div style={{ marginTop: 6, fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div style={{ color: C.muted }}>내 답안: <span style={{ color: C.text }}>{r.subjectiveInput || "—"}</span></div>
+                  <div style={{ color: C.muted }}>표준 정답: <span style={{ color: C.text }}>{r.item.data.canonicalAnswer || "—"}</span></div>
+                  {r.overridden && <div style={{ color: C.warning, fontWeight: 600 }}>✅ 인정답안 처리됨</div>}
+                </div>
+              )}
             </div>
           ))}
         </div>
