@@ -2095,6 +2095,7 @@ function QuizPage({ data, updateSrs, logReview, showToast, getUpcomingExams, onS
     const correct = !!(options[selected] && options[selected].correct);
     const responseTimeSec = Math.round((Date.now() - (startTime || Date.now())) / 1000);
     setRevealed(true);
+    updateSrs(item.data.id, correct ? 2 : 0);
     logReview({ cardId: null, questionId: item.data.id, correct, mode: "quiz", responseTimeSec });
     setSessionResults(prev => [...prev, { item, correct }]);
   }
