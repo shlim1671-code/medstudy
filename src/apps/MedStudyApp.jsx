@@ -2889,8 +2889,8 @@ function ImageLinkPanel({ showToast, updateData, S, C }) {
         linked += 1;
         return { ...c, image_url: url, image_present: true };
       });
-      await sSet(SK.questions, newQ);
-      await sSet(SK.cards, newC);
+      updateData("questions", newQ);
+      updateData("cards", newC);
       showToast(`${linked}개 항목에 image_url 연결됨`);
     } catch (e) {
       showToast(`연결 실패: ${e.message}`, "error");
