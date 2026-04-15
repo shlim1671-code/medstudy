@@ -2735,7 +2735,7 @@ function StatsPage({ data, S, T, C }) {
   );
 }
 
-function JsonBulkPanel({ showToast, S, C }) {
+function JsonBulkPanel({ showToast, updateData, S, C }) {
   const [jsonText, setJsonText] = useState("");
   const [subject, setSubject] = useState("해부학");
   const [sourceType, setSourceType] = useState("manual");
