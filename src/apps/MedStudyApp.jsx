@@ -2823,8 +2823,8 @@ function JsonBulkPanel({ showToast, updateData, S, C }) {
         existingC.add(front.trim());
       }
 
-      if (newQuestions.length > 0) await sSet(SK.questions, [...questions, ...newQuestions]);
-      if (newCards.length > 0) await sSet(SK.cards, [...cards, ...newCards]);
+      if (newQuestions.length > 0) updateData("questions", [...questions, ...newQuestions]);
+      if (newCards.length > 0) updateData("cards", [...cards, ...newCards]);
       showToast(`저장 완료: 문제 ${newQuestions.length}개 / 카드 ${newCards.length}개`);
     } catch (e) {
       showToast(`저장 실패: ${e.message}`, "error");
