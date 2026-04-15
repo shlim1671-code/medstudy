@@ -2868,7 +2868,7 @@ function JsonBulkPanel({ showToast, updateData, S, C }) {
   );
 }
 
-function ImageLinkPanel({ showToast, S, C }) {
+function ImageLinkPanel({ showToast, updateData, S, C }) {
   const [mappingText, setMappingText] = useState("{\n  \"p003_i01\": \"https://...\"\n}");
 
   async function connectImages() {
