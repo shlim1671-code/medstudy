@@ -4008,10 +4008,10 @@ ${textChunk}
                         ))}
                       </div>
                     )}
-                    {q.explanation && (
+                    {q.explanations && q.explanations.quick && (
                       <div style={{ background: C.surface2, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: C.muted, lineHeight: 1.7, marginBottom: 14 }}>
                         <div style={{ fontWeight: 600, marginBottom: 4, color: C.text }}>해설</div>
-                        {q.explanation}
+                        {q.explanations.quick}
                       </div>
                     )}
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
