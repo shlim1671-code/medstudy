@@ -3695,155 +3695,36 @@ ${textChunk}
         console.warn("[MedStudy] imageMapping이 서버 응답에 없습니다. 이미지 연결 불가.");
       }
 
-      // Vision-first extraction: send page images to Gemini Vision API
       let allParsedItems = [];
-      const pageImages = pdfJson.pageImages || [];
       const fullText = pdfJson.text || "";
 
-      if (pageImages.length > 0) {
-        // Vision mode: process pages as images in batches
-        const BATCH_SIZE = 3;
-        const totalBatches = Math.ceil(pageImages.length / BATCH_SIZE);
-        setPdfStatus({ phase: `Vision 분석 중... (0/${totalBatches})`, progress: 40 });
-
-        for (let i = 0; i < pageImages.length; i += BATCH_SIZE) {
-          const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-          setPdfStatus({
-            phase: `Vision 분석 중... (${batchNum}/${totalBatches})`,
-            progress: 40 + Math.round((batchNum / totalBatches) * 40),
-          });
-          const batch = pageImages.slice(i, i + BATCH_SIZE);
-          const parts = [];
-          for (const pg of batch) {
-            parts.push({ inline_data: { mime_type: "image/png", data: pg.base64 } });
-            parts.push({ text: `[Above is page ${pg.page}]` });
-          }
-          parts.push({ text: PDF_PARSE_PROMPT });
-          let json;
-          try {
-            json = await retryWithBackoff(async () => {
-              const res = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(pdfForm.geminiApiKey.trim())}`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    generationConfig: { maxOutputTokens: 65536, temperature: 0 },
-                    contents: [{ parts }],
-                  }),
-                }
-              );
-              const data = await res.json();
-              if (!res.ok) {
-                const msg = data?.error?.message || `HTTP ${res.status}`;
-                const err = new Error(`Vision batch failed: ${msg}`);
-                err.httpStatus = res.status;
-                throw err;
-              }
-              return data;
-            }, { maxRetries: 4, baseDelay: 10000, retryOn: [429, 500, 503] });
-          } catch (e) {
-            console.error(`Vision batch ${Math.floor(i / BATCH_SIZE) + 1} failed after retries: ${e.message}`);
-            continue;
-          }
-          const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-          const finishReason = json?.candidates?.[0]?.finishReason;
-          if (finishReason && finishReason !== "STOP") {
-            console.warn(`[MedStudy] Vision batch ${batchNum} finishReason=${finishReason} — response may be truncated`);
-          }
-          let items = [];
-          try {
-            items = safeJsonArrayFromText(rawText);
-          } catch (parseErr) {
-            console.error(`[MedStudy] Vision batch ${batchNum} parse failed: ${parseErr.message}`);
-          }
-          allParsedItems.push(...items);
-
-          // Inter-batch cooldown to avoid rate limits
-          if (i + BATCH_SIZE < pageImages.length) {
-            await new Promise(r => setTimeout(r, 8000 + Math.random() * 4000));
-          }
-        }
-
-        // Vision completion fallback: only when vision produced nothing
-        if (fullText.trim() && allParsedItems.length === 0) {
-          console.warn("[MedStudy] Running text extraction fallback after vision");
-          setPdfStatus({ phase: "텍스트 폴백 분석 중...", progress: 55 });
-          const CHUNK_SIZE = 15000;
-          const existingQuestionPrefixes = new Set(
-            allParsedItems
-              .map((item) => (item?.raw_question || "").slice(0, 30))
-              .filter(Boolean)
-          );
-          const pushUniqueFallbackItems = (items = []) => {
-            for (const item of items) {
-              const prefix = (item?.raw_question || "").slice(0, 30);
-              if (prefix && existingQuestionPrefixes.has(prefix)) continue;
-              if (prefix) existingQuestionPrefixes.add(prefix);
-              allParsedItems.push(item);
-            }
-          };
-
-          if (fullText.length <= CHUNK_SIZE) {
-            const items = await callGemini(fullText, pdfForm.geminiApiKey.trim());
-            pushUniqueFallbackItems(items);
-          } else {
-            const paragraphs = fullText.split(/\n\n+/);
-            const chunks = [];
-            let current = "";
-            for (const p of paragraphs) {
-              if ((current + "\n\n" + p).length > CHUNK_SIZE && current.length > 0) {
-                chunks.push(current);
-                current = p;
-              } else {
-                current = current ? current + "\n\n" + p : p;
-              }
-            }
-            if (current) chunks.push(current);
-            for (let i = 0; i < chunks.length; i++) {
-              setPdfStatus({
-                phase: `텍스트 폴백 (${i + 1}/${chunks.length})`,
-                progress: 55 + Math.round((i / chunks.length) * 25),
-              });
-              try {
-                const items = await callGemini(chunks[i], pdfForm.geminiApiKey.trim());
-                pushUniqueFallbackItems(items);
-              } catch (e) {
-                console.error(`Text chunk ${i + 1} failed:`, e);
-              }
-            }
-          }
-        }
+      setPdfStatus({ phase: "문제 구조화 중...", progress: 55 });
+      const CHUNK_SIZE = 15000;
+      if (fullText.length <= CHUNK_SIZE) {
+        allParsedItems = await callGemini(fullText, pdfForm.geminiApiKey.trim());
       } else {
-        // No page images available — pure text mode (legacy/fallback)
-        setPdfStatus({ phase: "문제 구조화 중...", progress: 55 });
-        const CHUNK_SIZE = 15000;
-        if (fullText.length <= CHUNK_SIZE) {
-          allParsedItems = await callGemini(fullText, pdfForm.geminiApiKey.trim());
-        } else {
-          const paragraphs = fullText.split(/\n\n+/);
-          const chunks = [];
-          let current = "";
-          for (const p of paragraphs) {
-            if ((current + "\n\n" + p).length > CHUNK_SIZE && current.length > 0) {
-              chunks.push(current);
-              current = p;
-            } else {
-              current = current ? current + "\n\n" + p : p;
-            }
+        const paragraphs = fullText.split(/\n\n+/);
+        const chunks = [];
+        let current = "";
+        for (const p of paragraphs) {
+          if ((current + "\n\n" + p).length > CHUNK_SIZE && current.length > 0) {
+            chunks.push(current);
+            current = p;
+          } else {
+            current = current ? current + "\n\n" + p : p;
           }
-          if (current) chunks.push(current);
-          for (let i = 0; i < chunks.length; i++) {
-            setPdfStatus({
-              phase: `문제 구조화 중... (${i + 1}/${chunks.length})`,
-              progress: 40 + Math.round((i / chunks.length) * 40),
-            });
-            try {
-              const items = await callGemini(chunks[i], pdfForm.geminiApiKey.trim());
-              allParsedItems.push(...items);
-            } catch (e) {
-              console.error(`Chunk ${i + 1} failed:`, e);
-            }
+        }
+        if (current) chunks.push(current);
+        for (let i = 0; i < chunks.length; i++) {
+          setPdfStatus({
+            phase: `문제 구조화 중... (${i + 1}/${chunks.length})`,
+            progress: 40 + Math.round((i / chunks.length) * 40),
+          });
+          try {
+            const items = await callGemini(chunks[i], pdfForm.geminiApiKey.trim());
+            allParsedItems.push(...items);
+          } catch (e) {
+            console.error(`Chunk ${i + 1} failed:`, e);
           }
         }
       }
