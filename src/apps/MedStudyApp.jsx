@@ -3545,6 +3545,7 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
   const [pdfStatus, setPdfStatus] = useState({ phase: "idle", progress: 0 });
   const [pdfResult, setPdfResult] = useState(null);
   const [detailItem, setDetailItem] = useState(null); // null | { type: "card"|"question", index: number }
+  const [imageUploading, setImageUploading] = useState(false);
 
   const PRESETS = {
     "past-exam-heavy": { pastExam: 5, slides: 3, textbook: 1, notes: 2 },
