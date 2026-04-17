@@ -4146,6 +4146,43 @@ ${textChunk}
                       {q.source_type && <span style={S.badge(C.warning)}>{SOURCE_TYPE_LABELS[q.source_type] || q.source_type}</span>}
                       {q.source_detail && <span style={S.badge(C.muted)}>{q.source_detail}</span>}
                     </div>
+                    {(q.image_url || q.image_present || q.image_ref) && (
+                      <div style={{ marginBottom: 14 }}>
+                        {q.image_url ? (
+                          <img src={q.image_url} alt="" style={{ maxWidth: "100%", borderRadius: 8, marginBottom: 8 }} />
+                        ) : (
+                          <div style={{ fontSize: 12, color: C.warning, marginBottom: 8 }}>이미지 미연결 (ref: {q.image_ref})</div>
+                        )}
+                        <label style={{ display: "inline-block" }}>
+                          <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setImageUploading(true);
+                            try {
+                              const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                              const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+                              const path = `${q.ingestion_batch_id || "manual"}/${q.image_ref || q.id}.png`;
+                              const res = await fetch(`${supabaseUrl}/storage/v1/object/card-images/${path}`, {
+                                method: "POST",
+                                headers: { Authorization: `Bearer ${supabaseKey}`, "x-upsert": "true", "Content-Type": "image/png" },
+                                body: file,
+                              });
+                              if (!res.ok) throw new Error(await res.text());
+                              const publicUrl = `${supabaseUrl}/storage/v1/object/public/card-images/${path}`;
+                              updateData("questions", (data.questions || []).map(x => x.id === q.id ? { ...x, image_url: publicUrl, image_present: true } : x));
+                              showToast("이미지 업로드 완료");
+                            } catch (err) {
+                              showToast("업로드 실패: " + err.message, "error");
+                            } finally {
+                              setImageUploading(false);
+                            }
+                          }} />
+                          <span style={{ ...S.btn("default"), fontSize: 12, cursor: "pointer", pointerEvents: imageUploading ? "none" : "auto", opacity: imageUploading ? 0.6 : 1 }}>
+                            {imageUploading ? "업로드 중..." : "🖼 이미지 업로드"}
+                          </span>
+                        </label>
+                      </div>
+                    )}
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {q.status !== "confirmed" && (
                         <button style={{ ...S.btn("success"), fontSize: 12 }} onClick={() => {
