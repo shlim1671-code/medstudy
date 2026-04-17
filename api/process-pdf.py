@@ -1,5 +1,4 @@
 import fitz  # PyMuPDF
-import base64
 import json
 import os
 from http.server import BaseHTTPRequestHandler
