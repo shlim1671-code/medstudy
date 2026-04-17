@@ -3589,7 +3589,7 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
     return retryWithBackoff(async () => {
       // Text-only fallback mode
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+        `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
