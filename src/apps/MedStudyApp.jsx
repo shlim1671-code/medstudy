@@ -4153,12 +4153,19 @@ ${textChunk}
                 </div>
                 <button style={{ ...S.btn("default"), fontSize: 11 }} onClick={() => setDetailItem({ type: "card", index: filteredCards.indexOf(c) })}>상세</button>
                 {c.status === "archived" ? (
-                  <button style={{ ...S.btn("success"), fontSize: 11 }} onClick={() => {
-                    updateData("cards", (data.cards || []).map(x =>
-                      x.id === c.id ? { ...x, status: undefined, archivedAt: undefined } : x
-                    ));
-                    showToast("복원됨");
-                  }}>복원</button>
+                  <>
+                    <button style={{ ...S.btn("success"), fontSize: 11 }} onClick={() => {
+                      updateData("cards", (data.cards || []).map(x =>
+                        x.id === c.id ? { ...x, status: undefined, archivedAt: undefined } : x
+                      ));
+                      showToast("복원됨");
+                    }}>복원</button>
+                    <button style={{ ...S.btn("danger"), fontSize: 11 }} onClick={() => {
+                      if (!window.confirm("이 카드를 영구 삭제합니다. 복구 불가능. 계속하시겠습니까?")) return;
+                      updateData("cards", (data.cards || []).filter(x => x.id !== c.id));
+                      showToast("영구 삭제됨");
+                    }}>영구 삭제</button>
+                  </>
                 ) : (
                   <button style={{ ...S.btn("danger"), fontSize: 11 }} onClick={() => {
                     updateData("cards", (data.cards || []).map(x =>
