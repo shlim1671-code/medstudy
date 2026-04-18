@@ -4185,6 +4185,7 @@ ${textChunk}
                       {q.question_intent && <span style={S.badge(C.primary)}>{q.question_intent}</span>}
                       {q.needs_review && <span style={S.badge(C.danger)}>검토필요</span>}
                     </div>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>{formatSource(q)}</div>
                     <div style={{ fontSize: 13 }}>{(q.parsed_question || q.raw_question || "").slice(0, 100)}</div>
                     {q.review_reason && <div style={{ fontSize: 11, color: C.warning, marginTop: 2 }}>{q.review_reason}</div>}
                   </div>
