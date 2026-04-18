@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import * as d3 from "d3";
 import { sGet, sSet, sDeleteMany } from "../lib/storage";
+import { supabase } from "../lib/supabaseClient";
 
 // ─────────────────────────────────────────
 // Storage Keys
