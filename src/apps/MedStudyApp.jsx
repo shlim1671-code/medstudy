@@ -3467,6 +3467,7 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [showArchivedQuestions, setShowArchivedQuestions] = useState(false);
+  const [subjectFilter, setSubjectFilter] = useState("전체");
   const [profForm, setProfForm] = useState(null);
   const [pdfForm, setPdfForm] = useState({
     subjectKo: "해부학",
