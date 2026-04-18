@@ -5618,7 +5618,8 @@ function CompressionPage({ data, getUpcomingExams, S, T, C }) {
     const seen = new Set();
     const pool = [];
     [...dangerCards, ...highImpCards, ...clusterCards].forEach(c => {
-      if (!seen.has(c.id)) { seen.add(c.id); pool.push(c); }
+      const key = `${c.ingestion_batch_id || "manual"}_${(c.front || "").slice(0, 50)}`;
+      if (!seen.has(key)) { seen.add(key); pool.push(c); }
     });
 
     return pool.map(c => ({
