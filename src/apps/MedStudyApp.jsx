@@ -3693,6 +3693,9 @@ ${textChunk}
       // 후처리: 그룹 헤더 제거 + 공통 발문 병합
       const parsedItems = postProcessParsedItems(allParsedItems);
       console.log(`[MedStudy] 후처리: ${allParsedItems.length}개 → ${parsedItems.length}개 (${allParsedItems.length - parsedItems.length}개 그룹 헤더 제거)`);
+      parsedItems.forEach(item => {
+        if (item.raw_question) item.raw_question = normalizeQuestionNumber(item.raw_question);
+      });
 
       if (parsedItems.length === 0) {
         setPdfStatus({ phase: "추출 실패", progress: 0 });
