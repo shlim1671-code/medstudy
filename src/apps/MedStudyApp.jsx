@@ -3511,12 +3511,13 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
     setImageUploading(true);
     try {
       const ext = (file.name.split(".").pop() || "png").toLowerCase();
-      const subjectSlug = SUBJECT_SLUG_MAP[item.subject] || item.subject || "general";
+      const subjectSlug = SUBJECT_SLUG_MAP[item.subject] || item.subject?.replace(/[^a-zA-Z0-9_-]/g, '_') || "general";
       const examUnit = item.exam_unit || "manual";
       const sourceType = item.source_type || "manual";
-      const sourceDetail = item.source_detail || "images";
+      const sourceDetail = item.source_detail || "";
       const filename = `${item.id}_${Date.now()}.${ext}`;
-      const path = `${subjectSlug}/${examUnit}/${sourceType}/${sourceDetail}/images/${filename}`;
+      const pathParts = [subjectSlug, examUnit, sourceType, sourceDetail, "images", filename].filter(Boolean);
+      const path = pathParts.join("/");
 
       // 디버깅: 환경 변수 및 요청 정보 확인
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
