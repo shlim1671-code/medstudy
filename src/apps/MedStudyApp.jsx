@@ -4156,9 +4156,17 @@ ${textChunk}
         ))}
       </div>
 
-      {(tab === "cards" || tab === "questions") && (
-        <input style={{ ...S.input, marginBottom: 12 }} placeholder="검색..." value={search} onChange={e => setSearch(e.target.value)} />
-      )}
+      {(tab === "cards" || tab === "questions") && (() => {
+        const allSubjects = ["전체", ...Array.from(new Set((data.cards || []).map(c => c.subject).filter(Boolean)))];
+        return (
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <select value={subjectFilter} onChange={e => setSubjectFilter(e.target.value)} style={{ ...S.input, width: "auto", marginBottom: 0 }}>
+              {allSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <input style={{ ...S.input, flex: 1, marginBottom: 0 }} placeholder="검색..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+        );
+      })()}
 
       {tab === "cards" && (
         <div>
