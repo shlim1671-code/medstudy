@@ -5494,6 +5494,9 @@ function DecisionTrainingPage({ data, logReview, showToast, refreshClusters, S, 
     return (
       <div>
         <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>감별 훈련</h2>
+        <select value={subject} onChange={e => setSubject(e.target.value)} style={{ ...S.input, marginBottom: 12, width: "auto" }}>
+          {decisionSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
         <div style={{ fontSize: 13, color: C.muted, marginBottom: 14 }}>
           오답이 반복된 개념 그룹에서 유사 선지를 구별하는 훈련입니다.
         </div>
