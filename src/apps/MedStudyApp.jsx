@@ -3999,6 +3999,34 @@ ${textChunk}
                         {q.explanations.quick}
                       </div>
                     )}
+                    {editMode ? (
+                      <div style={{ marginBottom: 14, background: C.surface2, borderRadius: 8, padding: "10px 14px" }}>
+                        <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: C.text }}>✏️ 답 수정</div>
+                        {subjectiveType ? (
+                          <textarea value={editDraft} onChange={e => setEditDraft(e.target.value)} style={{ ...S.input, width: "100%", minHeight: 60, resize: "vertical", fontFamily: "inherit" }} placeholder="정답 입력" />
+                        ) : (
+                          <div>
+                            {options.map((opt, i) => (
+                              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, cursor: "pointer" }} onClick={() => setEditDraft(opt.text)}>
+                                <input type="radio" readOnly checked={editDraft === opt.text} style={{ cursor: "pointer" }} />
+                                <span style={{ fontSize: 13, color: editDraft === opt.text ? C.success : C.text }}>{i + 1}. {opt.text}</span>
+                              </div>
+                            ))}
+                            <input value={editDraft} onChange={e => setEditDraft(e.target.value)} style={{ ...S.input, marginTop: 8, fontSize: 12 }} placeholder="또는 직접 입력" />
+                          </div>
+                        )}
+                        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                          <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={() => {
+                            const newOptions = subjectiveType ? options : options.map(opt => ({ ...opt, correct: opt.text === editDraft }));
+                            updateData("questions", (data.questions || []).map(x => x.id === q.id ? { ...x, canonicalAnswer: editDraft, options: newOptions } : x));
+                            showToast("저장됨"); setEditMode(false);
+                          }}>저장</button>
+                          <button style={{ ...S.btn("default"), fontSize: 12 }} onClick={() => setEditMode(false)}>취소</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button style={{ ...S.btn("default"), fontSize: 11, marginBottom: 14 }} onClick={() => { setEditMode(true); setEditDraft(q.canonicalAnswer || ""); }}>✏️ 답 수정</button>
+                    )}
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
                       {q.subject && <span style={S.badge(C.muted)}>{q.subject}</span>}
                       {q.exam_unit && <span style={S.badge(C.muted)}>{q.exam_unit}</span>}
