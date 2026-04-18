@@ -3497,6 +3497,39 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
     showToast("저장됨");
   }
 
+  async function handleImageUpload(file, item, itemType) {
+    if (!file) return;
+    setImageUploading(true);
+    try {
+      const ext = (file.name.split(".").pop() || "png").toLowerCase();
+      const subject = SUBJECT_SLUG_MAP[item.subject] || item.subject || "general";
+      const examUnit = item.exam_unit || "manual";
+      const sourceType = item.source_type || "manual";
+      const sourceDetail = item.source_detail || "images";
+      const filename = `${item.id}_${Date.now()}.${ext}`;
+      const path = `${subject}/${examUnit}/${sourceType}/${sourceDetail}/images/${filename}`;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const res = await fetch(`${supabaseUrl}/storage/v1/object/card-images/${path}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${supabaseKey}`, "x-upsert": "true", "Content-Type": file.type || "image/png" },
+        body: file,
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const publicUrl = `${supabaseUrl}/storage/v1/object/public/card-images/${path}`;
+      const key = itemType === "card" ? "cards" : "questions";
+      updateData(key, (data[key] || []).map(x =>
+        x.id === item.id ? { ...x, image_url: publicUrl, image_ref: filename, image_present: true } : x
+      ));
+      showToast("이미지 업로드됨");
+    } catch (e) {
+      console.error("[MedStudy] 이미지 업로드 실패:", e);
+      showToast(`업로드 실패: ${e.message}`, "error");
+    } finally {
+      setImageUploading(false);
+    }
+  }
+
   async function retryWithBackoff(fn, { maxRetries = 4, baseDelay = 10000, retryOn = [503, 429] } = {}) {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
