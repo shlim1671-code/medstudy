@@ -3511,21 +3511,34 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
     setImageUploading(true);
     try {
       const ext = (file.name.split(".").pop() || "png").toLowerCase();
-      const subject = SUBJECT_SLUG_MAP[item.subject] || item.subject || "general";
+      const subjectSlug = SUBJECT_SLUG_MAP[item.subject] || item.subject || "general";
       const examUnit = item.exam_unit || "manual";
       const sourceType = item.source_type || "manual";
       const sourceDetail = item.source_detail || "images";
       const filename = `${item.id}_${Date.now()}.${ext}`;
-      const path = `${subject}/${examUnit}/${sourceType}/${sourceDetail}/images/${filename}`;
+      const path = `${subjectSlug}/${examUnit}/${sourceType}/${sourceDetail}/images/${filename}`;
+
+      // 디버깅: 환경 변수 및 요청 정보 확인
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      const res = await fetch(`${supabaseUrl}/storage/v1/object/card-images/${path}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${supabaseKey}`, "x-upsert": "true", "Content-Type": file.type || "image/png" },
-        body: file,
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const publicUrl = `${supabaseUrl}/storage/v1/object/public/card-images/${path}`;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_KEY;
+      console.log("[DEBUG] VITE_SUPABASE_URL:", supabaseUrl);
+      console.log("[DEBUG] VITE_SUPABASE_KEY exists:", !!supabaseKey, "length:", supabaseKey?.length);
+      console.log("[DEBUG] Upload path:", path);
+      console.log("[DEBUG] File type:", file.type, "size:", file.size);
+
+      const { error: uploadError } = await supabase.storage
+        .from("card-images")
+        .upload(path, file, { contentType: file.type || "image/png", upsert: true });
+
+      if (uploadError) {
+        console.error("[DEBUG] Supabase upload error:", uploadError);
+        throw uploadError;
+      }
+
+      const { data: urlData } = supabase.storage.from("card-images").getPublicUrl(path);
+      const publicUrl = urlData.publicUrl;
+      console.log("[DEBUG] Upload success. Public URL:", publicUrl);
+
       const key = itemType === "card" ? "cards" : "questions";
       updateData(key, (data[key] || []).map(x =>
         x.id === item.id ? { ...x, image_url: publicUrl, image_ref: filename, image_present: true } : x
