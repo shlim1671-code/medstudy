@@ -3490,7 +3490,6 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
 
   async function callGemini(textChunk, apiKey) {
     return retryWithBackoff(async () => {
-      // Text-only fallback mode
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
         {
@@ -3518,14 +3517,16 @@ ${textChunk}
         err.httpStatus = res.status;
         throw err;
       }
-      const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-      // Fix: detect truncated responses (bug #8)
       const finishReason = json?.candidates?.[0]?.finishReason;
+      const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+      console.log(`[MedStudy] Gemini 응답 (finishReason=${finishReason}, 길이=${rawText.length}):`, rawText.slice(0, 400));
       if (finishReason && finishReason !== "STOP") {
-        console.warn(`[MedStudy] callGemini finishReason=${finishReason} — response may be truncated`);
+        console.warn(`[MedStudy] 응답이 ${finishReason}로 종료됨 — 일부 문제 누락 가능`);
       }
-      return safeJsonArrayFromText(rawText);
-    }, { maxRetries: 4, baseDelay: 10000, retryOn: [429, 500, 503] }); // Fix: include 500 (bug #10)
+      const items = safeJsonArrayFromText(rawText);
+      console.log(`[MedStudy] 청크당 ${items.length}개 문제 파싱됨`);
+      return items;
+    }, { maxRetries: 4, baseDelay: 10000, retryOn: [429, 500, 503] });
   }
 
 
