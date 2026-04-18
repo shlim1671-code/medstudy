@@ -253,6 +253,29 @@ function postProcessParsedItems(items) {
   return kept;
 }
 
+// 문제 번호를 맨 앞으로 이동. "~ 6번" → "6번. ~"
+function normalizeQuestionNumber(text) {
+  if (!text) return text;
+  const trimmed = text.trim();
+  if (/^\s*\d+\s*번\s*[.\s]/.test(trimmed)) return trimmed;
+  const trailMatch = trimmed.match(/[—\-\s.]\s*(\d+)\s*번\s*\.?\s*$/);
+  if (trailMatch) {
+    const num = trailMatch[1];
+    const body = trimmed.slice(0, trailMatch.index).replace(/[—\-\s.]+$/, "").trim();
+    return `${num}번. ${body}`;
+  }
+  const midMatches = [...trimmed.matchAll(/(\d+)\s*번\s*\./g)];
+  if (midMatches.length > 0) {
+    const last = midMatches[midMatches.length - 1];
+    const num = last[1];
+    const before = trimmed.slice(0, last.index).trim();
+    const after = trimmed.slice(last.index + last[0].length).trim();
+    const body = [before, after].filter(Boolean).join(" ");
+    return `${num}번. ${body}`;
+  }
+  return trimmed;
+}
+
 function safeJsonArrayFromText(text) {
   try {
     const cleaned = (text || "")
