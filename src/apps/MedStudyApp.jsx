@@ -4627,7 +4627,6 @@ ${textChunk}
           professors={data.professors || []} S={S} C={C} />
       )}
       {tab === "json_bulk" && <JsonBulkPanel showToast={showToast} updateData={updateData} S={S} C={C} />}
-      {tab === "image_link" && <ImageLinkPanel showToast={showToast} updateData={updateData} S={S} C={C} />}
 
     </div>
   );
