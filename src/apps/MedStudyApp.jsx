@@ -3868,12 +3868,14 @@ ${textChunk}
 
   const filteredCards = (data.cards || []).filter(c => {
     if (!showArchived && c.status === "archived") return false;
+    if (subjectFilter !== "전체" && c.subject !== subjectFilter) return false;
     if (!search) return true;
     return (c.front || "").toLowerCase().includes(search.toLowerCase()) ||
            (c.subject || "").toLowerCase().includes(search.toLowerCase());
   });
   const filteredQ = (data.questions || []).filter(q => {
     if (!showArchivedQuestions && q.status === "archived_reference") return false;
+    if (subjectFilter !== "전체" && q.subject !== subjectFilter) return false;
     if (!search) return true;
     return (q.parsed_question || q.raw_question || "").toLowerCase().includes(search.toLowerCase());
   });
