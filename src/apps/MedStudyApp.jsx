@@ -3887,7 +3887,7 @@ ${textChunk}
                 const concept = c.primary_concept_id && (data.concepts || []).find(x => x.id === c.primary_concept_id);
                 return (
                   <div>
-                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>카드 상세</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>카드 상세 · {formatSource(c)}</div>
                     <div style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.6, marginBottom: 10 }}>{c.front}</div>
                     <hr style={{ border: "none", borderTop: `1px solid ${C.border}`, margin: "0 0 10px" }} />
                     <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7, marginBottom: 12 }}>{c.back}</div>
