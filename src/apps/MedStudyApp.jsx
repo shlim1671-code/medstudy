@@ -3783,6 +3783,11 @@ ${textChunk}
         const isObjective = (item.type || "").toLowerCase() === "objective";
 
         if (!existingQ.has(normalizedRawQuestion)) {
+          const hasAnswer = canonicalAnswer && canonicalAnswer.trim().length > 0;
+          const hasQuestion = rawQuestion && rawQuestion.trim().length > 0;
+          const needsReview = !hasAnswer || !hasQuestion;
+          const reviewReason = !hasQuestion ? "문제 비어있음" : !hasAnswer ? "답 없음" : null;
+          const finalStatus = needsReview ? "unverified" : (normalizeConfidence(item.confidence) === "none" ? "unverified" : "confirmed");
           newQuestions.push({
             id: uid(),
             raw_question: rawQuestion,
@@ -3790,7 +3795,7 @@ ${textChunk}
             options: isObjective ? (Array.isArray(item.options) ? item.options : []) : [],
             canonicalAnswer,
             subjectiveType: !isObjective,
-            status: normalizeConfidence(item.confidence) === "none" ? "unverified" : "confirmed",
+            status: finalStatus,
             confidence: normalizeConfidence(item.confidence),
             confirmed_source: "ai_user",
             question_intent: normalizeQuestionIntent(item.question_intent),
