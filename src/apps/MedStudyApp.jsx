@@ -4038,7 +4038,9 @@ ${textChunk}
                         {q.image_url ? (
                           <img src={q.image_url} alt="" style={{ maxWidth: "100%", borderRadius: 8, marginBottom: 8 }} />
                         ) : (
-                          <div style={{ fontSize: 12, color: C.warning, marginBottom: 8 }}>이미지 미연결 (ref: {q.image_ref})</div>
+                          <div style={{ background: C.warning + "22", border: `1px solid ${C.warning}`, borderRadius: 8, padding: "10px 14px", marginBottom: 8 }}>
+                            <div style={{ fontSize: 13, color: C.warning, fontWeight: 600 }}>⚠️ 이미지 없음 — 업로드 필요{q.image_ref ? ` (ref: ${q.image_ref})` : ""}</div>
+                          </div>
                         )}
                         <label style={{ display: "inline-block" }}>
                           <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
@@ -4064,8 +4066,8 @@ ${textChunk}
                               setImageUploading(false);
                             }
                           }} />
-                          <span style={{ ...S.btn("default"), fontSize: 12, cursor: "pointer", pointerEvents: imageUploading ? "none" : "auto", opacity: imageUploading ? 0.6 : 1 }}>
-                            {imageUploading ? "업로드 중..." : "🖼 이미지 업로드"}
+                          <span style={{ ...S.btn(q.image_url ? "default" : "primary"), fontSize: 12, cursor: "pointer", pointerEvents: imageUploading ? "none" : "auto", opacity: imageUploading ? 0.6 : 1 }}>
+                            {imageUploading ? "업로드 중..." : q.image_url ? "🖼 이미지 교체" : "🖼 이미지 업로드"}
                           </span>
                         </label>
                       </div>
