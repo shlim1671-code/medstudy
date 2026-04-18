@@ -3890,7 +3890,18 @@ ${textChunk}
                     <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>카드 상세 · {formatSource(c)}</div>
                     <div style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.6, marginBottom: 10 }}>{c.front}</div>
                     <hr style={{ border: "none", borderTop: `1px solid ${C.border}`, margin: "0 0 10px" }} />
-                    <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7, marginBottom: 12 }}>{c.back}</div>
+                    {editMode ? (
+                      <div style={{ marginBottom: 12 }}>
+                        <textarea value={editDraft} onChange={e => setEditDraft(e.target.value)} style={{ ...S.input, width: "100%", minHeight: 80, resize: "vertical", fontFamily: "inherit" }} />
+                        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                          <button style={{ ...S.btn("primary"), fontSize: 12 }} onClick={() => { updateData("cards", (data.cards || []).map(x => x.id === c.id ? { ...x, back: editDraft } : x)); showToast("저장됨"); setEditMode(false); }}>저장</button>
+                          <button style={{ ...S.btn("default"), fontSize: 12 }} onClick={() => setEditMode(false)}>취소</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7, marginBottom: 6 }}>{c.back}</div>
+                    )}
+                    {!editMode && <button style={{ ...S.btn("default"), fontSize: 11, marginBottom: 12 }} onClick={() => { setEditMode(true); setEditDraft(c.back || ""); }}>✏️ 뒷면 수정</button>}
                     {c.explanations?.quick && (
                       <div style={{ background: C.surface2, borderRadius: 8, padding: "8px 12px", fontSize: 12, color: C.muted, marginBottom: 12 }}>{c.explanations.quick}</div>
                     )}
