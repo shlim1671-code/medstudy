@@ -230,141 +230,27 @@ function normalizeConfidence(raw) {
 }
 
 // ─────────────────────────────────────────
-// PDF 후처리: 그룹 헤더 제거 + 공통 발문 병합
+// PDF 후처리: 방어적 그룹 헤더 제거
 // ─────────────────────────────────────────
 function postProcessParsedItems(items) {
-  // Step 1: 그룹 헤더 감지 — [N-M번] 패턴
-  const groupHeaderPattern = /\[(\d+)\s*[-–~]\s*(\d+)번\]/;
-  const questionNumPattern = /^(\d+)번[\.\s:,]/;
-
-  // Step 2: question_family_id별 그룹핑
-  const familyGroups = {};
-  items.forEach((item, idx) => {
-    const fid = item.question_family_id;
-    if (fid) {
-      if (!familyGroups[fid]) familyGroups[fid] = [];
-      familyGroups[fid].push({ item, idx });
+  // 새 프롬프트에서는 Gemini가 완결된 독립 항목만 반환하도록 강제함.
+  // 후처리는 혹시 모를 그룹 헤더 항목 제거만 수행 (방어적).
+  const groupHeaderPattern = /^\s*\[\s*\d+\s*[-–~]\s*\d+\s*번\s*\]/;
+  const dropped = [];
+  const kept = items.filter((item) => {
+    const rq = (item?.raw_question || "").trim();
+    if (!rq) return false;
+    // [N-M번]으로 시작하고 options도 없으면 그룹 헤더로 간주 → 드롭
+    if (groupHeaderPattern.test(rq) && (!item.options || item.options.length === 0)) {
+      dropped.push(rq.slice(0, 60));
+      return false;
     }
+    return true;
   });
-
-  // Step 3: 그룹 헤더가 아닌 [N-M번] 패턴 항목도 감지 (family_id 없이 중복된 경우)
-  const headerIndices = new Set();
-  const rangeMap = {}; // "24-27" -> { stem, options, indices }
-
-  items.forEach((item, idx) => {
-    const rq = item.raw_question || "";
-    const match = rq.match(groupHeaderPattern);
-    if (match) {
-      const start = parseInt(match[1], 10);
-      const end = parseInt(match[2], 10);
-      const rangeKey = `${start}-${end}`;
-
-      // 이 범위에 해당하는 개별 문제가 있는지 확인
-      const hasIndividuals = items.some((other, otherIdx) => {
-        if (otherIdx === idx) return false;
-        const numMatch = (other.raw_question || "").match(questionNumPattern);
-        if (numMatch) {
-          const num = parseInt(numMatch[1], 10);
-          return num >= start && num <= end;
-        }
-        // question_family_id로도 확인
-        if (item.question_family_id && other.question_family_id === item.question_family_id && otherIdx !== idx) {
-          return true;
-        }
-        return false;
-      });
-
-      if (hasIndividuals) {
-        headerIndices.add(idx);
-        rangeMap[rangeKey] = {
-          stem: rq,
-          options: item.options || [],
-          familyId: item.question_family_id,
-          start,
-          end,
-        };
-      }
-    }
-  });
-
-  // Step 4: 개별 문제에 공통 발문 prepend + 공통 보기 복사
-  const processed = items.map((item, idx) => {
-    if (headerIndices.has(idx)) return null; // 그룹 헤더 제거
-
-    const rq = item.raw_question || "";
-    const numMatch = rq.match(questionNumPattern);
-
-    if (numMatch) {
-      const qNum = parseInt(numMatch[1], 10);
-      // 이 문제 번호가 어떤 range에 속하는지 확인
-      for (const group of Object.values(rangeMap)) {
-        if (qNum >= group.start && qNum <= group.end) {
-          // 공통 발문 추출: [N-M번] 이후의 텍스트에서 개별 문제 번호 이전까지
-          let sharedStem = group.stem;
-          // 발문에서 번호별 세부 내용 제거 (보기 리스트 이전까지만)
-          const bracketEnd = sharedStem.indexOf("번]");
-          if (bracketEnd > -1) {
-            sharedStem = sharedStem.substring(0, bracketEnd + 2) + sharedStem.substring(bracketEnd + 2).split(/\d+번[\.\s:,]/)[0];
-          }
-          sharedStem = sharedStem.trim();
-
-          // raw_question에 이미 공통 발문이 포함되어 있지 않으면 prepend
-          if (sharedStem && !rq.includes(sharedStem.substring(0, 20))) {
-            item = { ...item, raw_question: `${sharedStem}
-${rq}` };
-            item.parsed_question = item.raw_question;
-          }
-
-          // 공통 보기가 있고 개별 문제에 보기가 없으면 복사
-          if (group.options.length > 0 && (!item.options || item.options.length === 0)) {
-            item = { ...item, options: group.options };
-            // 보기가 복사되었으므로 type을 objective로 설정
-            if (item.type === "subjective") {
-              item = { ...item, type: "objective" };
-            }
-          }
-
-          break;
-        }
-      }
-    }
-
-    // question_family_id 기반 공통 발문 처리
-    if (item.question_family_id && familyGroups[item.question_family_id]) {
-      const group = familyGroups[item.question_family_id];
-      const header = group.find(g => {
-        const m = (g.item.raw_question || "").match(groupHeaderPattern);
-        return m && g.idx !== idx;
-      });
-      if (header && !headerIndices.has(idx)) {
-        const headerRq = header.item.raw_question || "";
-        const shortStem = headerRq.substring(0, Math.min(40, headerRq.length));
-        if (!rq.includes(shortStem.substring(0, 15))) {
-          // Extract stem portion
-          let stemText = headerRq;
-          const bracketEnd = stemText.indexOf("번]");
-          if (bracketEnd > -1) {
-            stemText = stemText.substring(0, bracketEnd + 2) + stemText.substring(bracketEnd + 2).split(/\d+번[\.\s:,]/)[0];
-          }
-          stemText = stemText.trim();
-          if (stemText) {
-            item = { ...item, raw_question: `${stemText}
-${rq}` };
-            item.parsed_question = item.raw_question;
-          }
-        }
-        // 공통 보기 복사
-        if (header.item.options?.length > 0 && (!item.options || item.options.length === 0)) {
-          item = { ...item, options: header.item.options };
-          if (item.type === "subjective") item = { ...item, type: "objective" };
-        }
-      }
-    }
-
-    return item;
-  }).filter(Boolean); // null 제거 (그룹 헤더)
-
-  return processed;
+  if (dropped.length > 0) {
+    console.warn(`[MedStudy] 그룹 헤더 ${dropped.length}개 제거:`, dropped);
+  }
+  return kept;
 }
 
 function safeJsonArrayFromText(text) {
