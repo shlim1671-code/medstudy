@@ -1554,10 +1554,14 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
     D3: "상위 30% 고중요도 + 최근 3일 오답 포함",
     D1: "최고 중요도 상위 15%만 - D-1 최종 점검",
   };
+  const reviewSubjects = ["전체", ...Array.from(new Set((data.cards || []).map(c => c.subject).filter(Boolean)))];
   if (!sessionCards) {
     return (
       <div>
         <h2 style={{ margin: "0 0 16px", color: C.primary , ...T.heading }}>복습</h2>
+        <select value={subject} onChange={e => setSubject(e.target.value)} style={{ ...S.input, marginBottom: 12, width: "auto" }}>
+          {reviewSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
         {modeOptions.length > 1 && (
           <div style={{ ...S.card, marginBottom: 14 }}>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>복습 모드 선택</div>
