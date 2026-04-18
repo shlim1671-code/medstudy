@@ -3459,6 +3459,7 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
   const [tab, setTab] = useState("cards");
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [showArchivedQuestions, setShowArchivedQuestions] = useState(false);
   const [profForm, setProfForm] = useState(null);
   const [pdfForm, setPdfForm] = useState({
     subjectKo: "해부학",
