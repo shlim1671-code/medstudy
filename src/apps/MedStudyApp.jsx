@@ -4182,6 +4182,25 @@ ${textChunk}
 
       {tab === "questions" && (
         <div>
+          {(data.questions || []).some(q => q.status === "archived_reference") && (
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginBottom: 8 }}>
+              {showArchivedQuestions && (
+                <button style={{ ...S.btn("danger"), fontSize: 11, padding: "4px 10px" }}
+                  onClick={() => {
+                    const archivedCount = (data.questions || []).filter(q => q.status === "archived_reference").length;
+                    if (!window.confirm(`보관된 문제 ${archivedCount}개를 영구 삭제합니다. 복구 불가능. 계속하시겠습니까?`)) return;
+                    updateData("questions", (data.questions || []).filter(q => q.status !== "archived_reference"));
+                    showToast(`${archivedCount}개 영구 삭제됨`);
+                  }}>
+                  보관 문제 전체 영구 삭제
+                </button>
+              )}
+              <button style={{ ...S.btn("default"), fontSize: 11, padding: "4px 10px" }}
+                onClick={() => setShowArchivedQuestions(v => !v)}>
+                {showArchivedQuestions ? "보관 숨기기" : `보관 문제 보기 (${(data.questions || []).filter(q => q.status === "archived_reference").length})`}
+              </button>
+            </div>
+          )}
           {filteredQ.length === 0 ? (
             <div style={S.card}><div style={{ color: C.muted }}>문제 없음</div></div>
           ) : filteredQ.map(q => {
