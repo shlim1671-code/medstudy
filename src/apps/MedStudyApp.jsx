@@ -3810,6 +3810,9 @@ ${textChunk}
             tags: [pdfForm.source_type, subjectSlug],
             source_type: pdfForm.source_type,
             subject: pdfForm.subjectKo,
+            exam_unit: pdfForm.exam_unit.trim() || null,
+            needs_review: needsReview,
+            review_reason: reviewReason,
             ingestion_batch_id: ingestionBatchId,
             createdAt: new Date().toISOString(),
           });
