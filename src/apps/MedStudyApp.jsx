@@ -4118,7 +4118,18 @@ ${textChunk}
       {tab === "cards" && (
         <div>
           {(data.cards || []).some(c => c.status === "archived") && (
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginBottom: 8 }}>
+              {showArchived && (
+                <button style={{ ...S.btn("danger"), fontSize: 11, padding: "4px 10px" }}
+                  onClick={() => {
+                    const archivedCount = (data.cards || []).filter(c => c.status === "archived").length;
+                    if (!window.confirm(`보관된 카드 ${archivedCount}개를 영구 삭제합니다. 복구 불가능. 계속하시겠습니까?`)) return;
+                    updateData("cards", (data.cards || []).filter(c => c.status !== "archived"));
+                    showToast(`${archivedCount}개 영구 삭제됨`);
+                  }}>
+                  보관 카드 전체 영구 삭제
+                </button>
+              )}
               <button style={{ ...S.btn("default"), fontSize: 11, padding: "4px 10px" }}
                 onClick={() => setShowArchived(v => !v)}>
                 {showArchived ? "보관 숨기기" : `보관 카드 보기 (${(data.cards || []).filter(c => c.status === "archived").length})`}
