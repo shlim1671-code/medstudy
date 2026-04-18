@@ -4240,7 +4240,16 @@ ${textChunk}
                         showToast("보관됨");
                       }}>보관</button>
                     )}
-                    <button style={{ ...S.btn("danger"), fontSize: 11 }} onClick={() => { updateData("questions", (data.questions || []).filter(x => x.id !== q.id)); showToast("삭제됨"); }}>삭제</button>
+                    {q.status === "archived_reference" && (
+                      <button style={{ ...S.btn("danger"), fontSize: 11 }} onClick={() => {
+                        if (!window.confirm("이 문제를 영구 삭제합니다. 복구 불가능. 계속하시겠습니까?")) return;
+                        updateData("questions", (data.questions || []).filter(x => x.id !== q.id));
+                        showToast("영구 삭제됨");
+                      }}>영구 삭제</button>
+                    )}
+                    {q.status !== "archived_reference" && (
+                      <button style={{ ...S.btn("danger"), fontSize: 11 }} onClick={() => { updateData("questions", (data.questions || []).filter(x => x.id !== q.id)); showToast("삭제됨"); }}>삭제</button>
+                    )}
                   </div>
                 </div>
               </div>
