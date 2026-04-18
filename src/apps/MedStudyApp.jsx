@@ -4130,8 +4130,7 @@ ${textChunk}
               <div key={c.id} style={{ ...S.card, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ flex: 1, marginRight: 8 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 2 }}>
-                    <span style={{ fontSize: 11, color: C.muted }}>{c.subject} · {c.chapter} · {c.tier || "active"}</span>
-                    <span style={S.badge(C.warning)}>{SOURCE_TYPE_LABELS[c.source_type || "manual"] || (c.source_type || "manual")}</span>
+                    <span style={{ fontSize: 11, color: C.muted }}>{formatSource(c)} · {c.tier || "active"}</span>
                     {concept && <span style={S.badge(C.primary)}>{concept.primaryLabel || c.primary_concept_id}</span>}
                     {!concept && c.primary_concept_id && <span style={S.badge(C.warning)}>{c.primary_concept_id}</span>}
                   </div>
