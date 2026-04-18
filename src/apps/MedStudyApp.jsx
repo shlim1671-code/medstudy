@@ -3893,7 +3893,6 @@ ${textChunk}
     ["inject_card", "카드 주입"],
     ["inject_question", "문제 주입"],
     ["json_bulk", "JSON 일괄"],
-    ["image_link", "이미지 연결"],
   ];
 
   return (
