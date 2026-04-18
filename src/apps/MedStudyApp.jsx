@@ -5595,8 +5595,10 @@ function CompressionPage({ data, getUpcomingExams, S, T, C }) {
   const [scanned, setScanned] = useState({});
   const [examScope, setExamScope] = useState("전체");
   const [scopeType, setScopeType] = useState("all");
+  const [subject, setSubject] = useState("전체");
 
   const upcomingExams = getUpcomingExams();
+  const compressionSubjects = ["전체", ...Array.from(new Set((data.cards || []).map(c => c.subject).filter(Boolean)))];
 
   function buildPool() {
     // Phase 7A Task 6: strip foundation (search-only) concept cards from compression pool
@@ -5606,6 +5608,7 @@ function CompressionPage({ data, getUpcomingExams, S, T, C }) {
       (!c.primary_concept_id || !foundationIds.has(c.primary_concept_id))
     );
 
+    if (subject !== "전체") cards = cards.filter(c => c.subject === subject);
     cards = filterByExamScopeTyped(cards, data.exams || [], examScope, scopeType);
 
     const dangerIds = getDangerCardIds(data.reviewLog);
