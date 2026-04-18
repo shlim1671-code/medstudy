@@ -3952,45 +3952,37 @@ ${textChunk}
                       {c.tier && <span style={S.badge(C.primary)}>{c.tier}</span>}
                       {concept && <span style={S.badge(C.primary)}>{concept.primaryLabel || c.primary_concept_id}</span>}
                     </div>
-                    {(c.image_url || c.image_present || c.image_ref) && (
-                      <div style={{ marginBottom: 14 }}>
-                        {c.image_url ? (
-                          <img src={c.image_url} alt="" style={{ maxWidth: "100%", borderRadius: 8, marginBottom: 8 }} />
-                        ) : (
-                          <div style={{ background: C.warning + "22", border: `1px solid ${C.warning}`, borderRadius: 8, padding: "10px 14px", marginBottom: 8 }}>
-                            <div style={{ fontSize: 13, color: C.warning, fontWeight: 600 }}>⚠️ 이미지 없음 — 업로드 필요{c.image_ref ? ` (ref: ${c.image_ref})` : ""}</div>
+                    <div style={{ marginBottom: 14 }}>
+                      {c.image_url ? (
+                        <div>
+                          <img src={c.image_url} alt="" style={{ maxHeight: 200, maxWidth: "100%", borderRadius: 8, display: "block", margin: "0 auto 8px" }} />
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <label style={{ display: "inline-block" }}>
+                              <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => handleImageUpload(e.target.files?.[0], c, "card")} />
+                              <span style={{ ...S.btn("default"), fontSize: 11, cursor: "pointer", pointerEvents: imageUploading ? "none" : "auto", opacity: imageUploading ? 0.6 : 1 }}>
+                                {imageUploading ? "업로드 중..." : "🖼 교체"}
+                              </span>
+                            </label>
+                            <button style={{ ...S.btn("danger"), fontSize: 11 }} onClick={() => {
+                              if (!window.confirm("이미지를 제거하시겠습니까?")) return;
+                              updateData("cards", (data.cards || []).map(x => x.id === c.id ? { ...x, image_url: null, image_ref: null, image_present: false } : x));
+                              showToast("이미지 제거됨");
+                            }}>🗑 이미지 제거</button>
                           </div>
-                        )}
-                        <label style={{ display: "inline-block" }}>
-                          <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            setImageUploading(true);
-                            try {
-                              const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                              const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-                              const path = `${c.ingestion_batch_id || "manual"}/${c.image_ref || c.id}.png`;
-                              const res = await fetch(`${supabaseUrl}/storage/v1/object/card-images/${path}`, {
-                                method: "POST",
-                                headers: { Authorization: `Bearer ${supabaseKey}`, "x-upsert": "true", "Content-Type": "image/png" },
-                                body: file,
-                              });
-                              if (!res.ok) throw new Error(await res.text());
-                              const publicUrl = `${supabaseUrl}/storage/v1/object/public/card-images/${path}`;
-                              updateData("cards", (data.cards || []).map(x => x.id === c.id ? { ...x, image_url: publicUrl, image_present: true } : x));
-                              showToast("이미지 업로드 완료");
-                            } catch (err) {
-                              showToast("업로드 실패: " + err.message, "error");
-                            } finally {
-                              setImageUploading(false);
-                            }
-                          }} />
-                          <span style={{ ...S.btn(c.image_url ? "default" : "primary"), fontSize: 12, cursor: "pointer", pointerEvents: imageUploading ? "none" : "auto", opacity: imageUploading ? 0.6 : 1 }}>
-                            {imageUploading ? "업로드 중..." : c.image_url ? "🖼 이미지 교체" : "🖼 이미지 업로드"}
-                          </span>
-                        </label>
-                      </div>
-                    )}
+                        </div>
+                      ) : (
+                        <div style={{ background: C.surface2, border: `1px dashed ${C.warning}`, borderRadius: 8, padding: 16, textAlign: "center" }}>
+                          <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>📷 이미지 없음 — 필요 시 업로드</div>
+                          <label style={{ display: "inline-block", marginBottom: 8 }}>
+                            <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => handleImageUpload(e.target.files?.[0], c, "card")} />
+                            <span style={{ ...S.btn("primary"), fontSize: 12, cursor: "pointer", pointerEvents: imageUploading ? "none" : "auto", opacity: imageUploading ? 0.6 : 1 }}>
+                              {imageUploading ? "업로드 중..." : "🖼 이미지 업로드"}
+                            </span>
+                          </label>
+                          <div style={{ fontSize: 11, color: C.muted }}>기출 문제의 그림/도표가 필요하면 여기서 업로드하세요.</div>
+                        </div>
+                      )}
+                    </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       {c.status !== "archived" ? (
                         <button style={{ ...S.btn("danger"), fontSize: 12 }} onClick={() => {
