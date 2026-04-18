@@ -5655,9 +5655,12 @@ function CompressionPage({ data, getUpcomingExams, S, T, C }) {
           {scannedCount}/{pool.length}
         </span>
       </div>
-      <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
         위험 카드 · 고중요도 상위 25% · 혼동 클러스터 — 답이 바로 보입니다.
       </div>
+      <select value={subject} onChange={e => { setSubject(e.target.value); setScanned({}); }} style={{ ...S.input, marginBottom: 14, width: "auto" }}>
+        {compressionSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+      </select>
 
       {upcomingExams.length > 0 && (
         <div style={{ marginBottom: 14 }}>
