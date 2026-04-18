@@ -5376,8 +5376,9 @@ function DecisionTrainingPage({ data, logReview, showToast, refreshClusters, S, 
   const [selected, setSelected] = useState(null);
   const [revealed, setRevealed] = useState(false);
   const [results, setResults] = useState([]);
+  const [subject, setSubject] = useState("전체");
 
-  const clusters = data.confusionClusters || [];
+  const allClusters = data.confusionClusters || [];
   // Phase 7A Task 6: exclude foundation (search-only) concept cards from decision training
   const foundationIds = getFoundationConceptIds(data.concepts);
   const cardById = {};
