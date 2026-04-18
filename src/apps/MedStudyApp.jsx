@@ -1544,7 +1544,8 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
     }
     setCurrent(c => c + 1); setFlipped(false); setStartTime(Date.now());
   }
-  const dueCount = getDueCards(selectedMode !== "normal" ? selectedMode : null).length;
+  const dueCountRaw = getDueCards(selectedMode !== "normal" ? selectedMode : null);
+  const dueCount = subject !== "전체" ? dueCountRaw.filter(c => c.subject === subject).length : dueCountRaw.length;
   const modeColor = selectedMode === "D1" ? C.danger : selectedMode === "D3" ? C.warning : selectedMode === "D7" ? C.warning : selectedMode === "danger" ? C.danger : C.primary;
   const modeDesc = {
     normal: "하이브리드 우선순위 (importance x SRS x 시험근접도)",
