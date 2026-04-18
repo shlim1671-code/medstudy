@@ -3973,9 +3973,10 @@ ${textChunk}
               {detailItem.type === "question" && (() => {
                 const q = item;
                 const options = q.options || [];
+                const subjectiveType = q.type === "subjective";
                 return (
                   <div>
-                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>문제 상세</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>문제 상세 · {formatSource(q)}</div>
                     <div style={{ fontSize: 14, lineHeight: 1.8, whiteSpace: "pre-wrap", marginBottom: 14, fontFamily: FONT_HEADING }}>{q.parsed_question || q.raw_question}</div>
                     {options.length > 0 && (
                       <div style={{ marginBottom: 14 }}>
