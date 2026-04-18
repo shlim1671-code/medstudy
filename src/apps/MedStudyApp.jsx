@@ -1522,7 +1522,8 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
   if (nearestDays !== null && nearestDays <= 1) modeOptions.push({ id: "D1", label: "D-1 최종", desc: "상위 15%만" });
   function startSession() {
     const mode = selectedMode !== "normal" ? selectedMode : null;
-    const due = getDueCards(mode);
+    let due = getDueCards(mode);
+    if (subject !== "전체") due = due.filter(c => c.subject === subject);
     if (due.length === 0) { showToast("복습할 카드 없음", "error"); return; }
     setSessionCards(due); setCurrent(0); setFlipped(false);
     if (onSessionChange) onSessionChange({ label: "복습 중", progress: "1 / " + due.length });
