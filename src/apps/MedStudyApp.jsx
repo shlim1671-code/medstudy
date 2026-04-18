@@ -5389,6 +5389,14 @@ function DecisionTrainingPage({ data, logReview, showToast, refreshClusters, S, 
     )
     .forEach(c => { cardById[c.id] = c; });
 
+  const decisionSubjects = ["전체", ...Array.from(new Set((data.cards || []).map(c => c.subject).filter(Boolean)))];
+  const clusters = subject !== "전체"
+    ? allClusters.filter(cl => {
+        const firstCard = cardById[cl.card_ids?.[0]];
+        return firstCard && firstCard.subject === subject;
+      })
+    : allClusters;
+
   function buildSession(cid) {
     const cluster = clusters.find(c => c.id === cid);
     if (!cluster) return;
