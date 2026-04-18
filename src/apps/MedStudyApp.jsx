@@ -3525,6 +3525,9 @@ function ManagePage({ data, updateData, showToast, S, T, C }) {
             generationConfig: {
               maxOutputTokens: 65536,
               temperature: 0,
+              thinkingConfig: {
+                thinkingBudget: 0,
+              },
             },
             contents: [{
               parts: [{ text: `${PDF_PARSE_PROMPT}
