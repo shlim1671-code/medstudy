@@ -111,96 +111,113 @@ WORKFLOW:
 1. Read the ENTIRE document from start to end.
 2. Identify every question boundary using numbering patterns.
 3. For each question, extract ALL fields below.
-4. Return a single JSON array with ALL questions. Do not skip any.
+4. Return a single JSON array with ALL questions in the document.
 
-QUESTION BOUNDARY DETECTION:
+=== CORE PRINCIPLE: EACH OUTPUT ITEM IS A COMPLETE, SELF-CONTAINED QUESTION ===
+
+Every item in the output array MUST be independently answerable without
+referring to any other item. This means:
+
+- NEVER output a "group header" item (e.g. an item whose raw_question is
+  just "[1-6번] 다음 위치에 해당하는 명칭을 쓰시오" with no specific sub-question).
+  Such headers must be FULLY MERGED into each individual sub-question.
+
+- If 6 questions share the same stem, output 6 items — each with the FULL
+  stem duplicated into its raw_question, followed by that specific question's
+  content.
+
+- Never use range markers like "[1-6번]" in the output. Use the individual
+  question number only (e.g. "1번", "2번").
+
+=== QUESTION BOUNDARY DETECTION ===
+
 - Common patterns: "1.", "2)", "문제 1", "Q1", "#1", "1번", "(1)", "제1문"
 - Sub-questions under a shared stem: "1-1", "1-2" or "(가)", "(나)" or "ㄱ.", "ㄴ."
 - A new question starts when a new number pattern appears at the start of a line.
 - Answer keys may appear at the end — extract correct answers from them.
 
-OPTION/CHOICE DETECTION:
+=== SHARED STEM (공통 지문/공통 발문) RULE ===
+
+When multiple questions share introductory text, a passage, a diagram stem,
+or a numbered word bank:
+
+1. Duplicate the FULL shared context into EACH question's raw_question.
+2. Follow it with the specific question's own text and number.
+3. Do NOT create a separate header item.
+4. Do NOT use range notation like "[N-M번]" anywhere in raw_question.
+
+Example — if the document contains:
+  "다음 위치에 해당하는 명칭을 쓰시오.
+   1. ___  2. ___  3. ___  4. ___  5. ___  6. ___"
+
+Output 6 separate items. Each raw_question looks like:
+  "다음 위치에 해당하는 명칭을 쓰시오. 1번"
+  "다음 위치에 해당하는 명칭을 쓰시오. 2번"
+  ... etc.
+
+All 6 share the same question_family_id (e.g. "fam_q1_6").
+
+=== OPTION/CHOICE DETECTION ===
+
 - Numbered: "①②③④⑤", "1)2)3)4)5)", "(1)(2)(3)(4)(5)"
 - Lettered: "ㄱ.ㄴ.ㄷ.", "가.나.다.", "a.b.c."
 - Combination: "ㄱ,ㄴ" "ㄱ,ㄷ" (보기 조합형)
 - True/False: "O/X", "맞다/틀리다"
-- Numbered word bank: a shared list of numbered terms above a group of questions
-  (e.g. "1. leukocytosis 2. thrombocytopenia 3. anemia 4. apoptosis 5. ischemia")
-  where each sub-question asks to pick one term for a blank ( ).
-  Treat the numbered list as the option set — these are OBJECTIVE.
-- IMPORTANT: For multiple choice questions, the 'question' field must contain ONLY the question stem and any shared passage/context. Do NOT include the numbered options (1. 2. 3. 4. 5.) in the 'question' field. The options belong only in the 'options' array.
+- Numbered word bank shared across sub-questions: treat the numbered list
+  as the option set — these are OBJECTIVE.
 
-SHARED STEM (공통 지문) RULE:
-- If multiple questions share the same introductory paragraph or "다음을 읽고"
-  passage, DUPLICATE the full shared stem text into EACH question's raw_question.
-- Include any tables, lists, or data that are part of the shared context.
+IMPORTANT: For multiple choice questions, raw_question must contain ONLY
+the question stem (+ any shared passage). Do NOT include the numbered
+options (1. 2. 3. 4. 5.) inside raw_question — options belong only in
+the options array.
 
-IMAGE HANDLING:
-- You can SEE the actual page images. If a question includes or references
-  a diagram, figure, photo, table, or any visual element, set image_present: true.
-- For image_ref, use the format "pXXX_iYY" where XXX is the zero-padded page number
-  and YY is the image index on that page (e.g. "p003_i01" for first image on page 3).
-  If you cannot determine a specific embedded image index, use "p003_i00" (page-level ref).
-- If text contains [IMAGE pXXX_iYY] markers (text-mode fallback), use those directly.
-- If a question references "그림", "사진", "도표", "표" with a visible image nearby,
-  set image_present: true and assign the appropriate image_ref.
+=== TYPE CLASSIFICATION ===
 
-OUTPUT SCHEMA — for EACH question:
+- "objective": has numbered/lettered choices (MCQ, T/F, 보기 조합), OR
+  references a shared numbered word bank. Even if the question surface
+  looks like fill-in-blank ( ), classify as "objective" when an option
+  list is present anywhere in the question block or shared stem.
+- "subjective": fill-in-blank, short answer, essay, labeling, drawing —
+  with NO option list available anywhere.
+
+=== OUTPUT SCHEMA — for EACH question ===
+
 {
-  "raw_question": "exact original question text including shared stem if any",
+  "raw_question": "complete self-contained question text (shared stem + this question's specific content + individual number)",
   "options": [
     {"text": "option text", "correct": true/false}
   ],
   "canonicalAnswer": "exact correct answer text, or null if unknown",
   "type": "objective" or "subjective",
-  "image_present": true/false,
-  "image_ref": "pXXX_iYY" or null,
   "confidence": "HIGH" / "MEDIUM" / "NONE",
-  "question_family_id": "shared id for decomposed sub-items from same parent, or null"
+  "question_family_id": "shared id for sub-items from the same parent stem, or null",
+  "image_present": false,
+  "image_ref": null
 }
 
-TYPE CLASSIFICATION:
-- "objective": has numbered/lettered choices (MCQ, T/F, 보기 조합), OR references
-  a shared numbered word bank anywhere in the same question block or shared stem.
-  Even if the question surface looks like fill-in-blank ( ), classify as "objective"
-  if a numbered option list is present.
-- "subjective": fill-in-the-blank or short answer with NO option list available
-  anywhere in the question block or shared stem. Essay, labeling, drawing.
+Note: image_present must always be false and image_ref must always be null.
+Images are handled manually by the user after extraction.
 
-CONFIDENCE:
+=== CONFIDENCE ===
+
 - HIGH: answer explicitly provided in answer key or marked in the document
 - MEDIUM: answer strongly implied by context (e.g. bold/underlined option)
 - NONE: no answer provided anywhere in the document
 
-ANSWER KEY INTEGRATION:
-- If the document contains an answer key section (정답, 답, Answer Key),
-  match each answer to its question number and set the correct option's
-  "correct" field to true, set canonicalAnswer, and confidence to "HIGH".
+=== ANSWER KEY INTEGRATION ===
 
-=== SPECIAL CASE: IMAGE-LABELED FILL-IN-BLANK ===
-Some questions show a single diagram/image with numbered labels (1, 2, 3...)
-pointing to different structures, and a shared stem like
-"다음 위치에 해당하는 명칭을 쓰시오".
+If the document has an answer key section (정답, 답, Answer Key),
+match each answer to its question number, set the correct option's
+"correct" field to true, set canonicalAnswer, and confidence to "HIGH".
 
-For these questions, DECOMPOSE into separate items — one per numbered label:
-- Each item gets its own entry in the output array.
-- raw_question: include the shared stem + the specific label number,
-  e.g. "[1-6번] 다음 위치에 해당하는 명칭을 쓰시오 — 1번"
-- type: "subjective"
-- All items from the same parent question share the same question_family_id
-  (generate a short id like "fam_" + original question number).
-- image_present: true (all share the same parent image).
-- image_ref: same image_ref for all items in the family.
-- canonicalAnswer: the specific answer for that label number, or null if unknown.
+=== CRITICAL RULES ===
 
-CRITICAL RULES:
-- Extract ALL questions. Never skip any question.
+- Extract ALL questions. Never skip any question, even if the answer is missing.
 - Preserve original Korean text exactly. Do not translate or paraphrase.
 - Do not solve questions or generate explanations.
 - Do not add content not present in the original document.
-- Handle mixed formatting — questions may use different numbering styles
-  within the same document.
-- If a question has no options (e.g. "빈칸을 채우시오"), type = "subjective".
+- Never output a group header item. Every item is a complete question.
+- Never use range markers like "[1-6번]" in raw_question.
 
 Return ONLY a valid JSON array. No markdown, no explanation, no preamble.
 `.trim();
