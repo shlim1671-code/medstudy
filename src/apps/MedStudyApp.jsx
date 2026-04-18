@@ -3603,34 +3603,66 @@ ${textChunk}
       const fullText = pdfJson.text || "";
 
       setPdfStatus({ phase: "문제 구조화 중...", progress: 55 });
-      const CHUNK_SIZE = 15000;
+      const CHUNK_SIZE = 22000;
+      console.log(`[MedStudy] 추출된 텍스트 길이: ${fullText.length}자`);
+
       if (fullText.length <= CHUNK_SIZE) {
+        console.log(`[MedStudy] 단일 청크로 처리`);
         allParsedItems = await callGemini(fullText, pdfForm.geminiApiKey.trim());
       } else {
-        const paragraphs = fullText.split(/\n\n+/);
+        // 문제 번호 경계 기준으로 청킹 — "\n숫자번." 또는 "\n숫자." 패턴 앞에서 자름
+        const lines = fullText.split("\n");
+        const boundaryPattern = /^\s*(\d+)\s*(번|\.)[\s.]/;
         const chunks = [];
         let current = "";
-        for (const p of paragraphs) {
-          if ((current + "\n\n" + p).length > CHUNK_SIZE && current.length > 0) {
+        for (const line of lines) {
+          const candidate = current ? current + "\n" + line : line;
+          if (candidate.length > CHUNK_SIZE && current.length > 0 && boundaryPattern.test(line)) {
             chunks.push(current);
-            current = p;
+            current = line;
           } else {
-            current = current ? current + "\n\n" + p : p;
+            current = candidate;
           }
         }
         if (current) chunks.push(current);
+
+        // fallback: 경계를 못 찾아서 청크가 너무 크거나 하나밖에 없으면 기존 paragraph 방식
+        if (chunks.length === 0 || chunks.some(c => c.length > CHUNK_SIZE * 1.5)) {
+          console.warn(`[MedStudy] 번호 경계 청킹 실패 → paragraph 방식으로 fallback`);
+          chunks.length = 0;
+          const paragraphs = fullText.split(/\n\n+/);
+          let cur = "";
+          for (const p of paragraphs) {
+            if ((cur + "\n\n" + p).length > CHUNK_SIZE && cur.length > 0) {
+              chunks.push(cur);
+              cur = p;
+            } else {
+              cur = cur ? cur + "\n\n" + p : p;
+            }
+          }
+          if (cur) chunks.push(cur);
+        }
+
+        console.log(`[MedStudy] ${chunks.length}개 청크로 분할됨 (평균 ${Math.round(fullText.length / chunks.length)}자)`);
+
         for (let i = 0; i < chunks.length; i++) {
           setPdfStatus({
             phase: `문제 구조화 중... (${i + 1}/${chunks.length})`,
             progress: 40 + Math.round((i / chunks.length) * 40),
           });
+          console.log(`[MedStudy] 청크 ${i + 1}/${chunks.length} 전송 중 (${chunks[i].length}자)`);
           try {
             const items = await callGemini(chunks[i], pdfForm.geminiApiKey.trim());
             allParsedItems.push(...items);
           } catch (e) {
             console.error(`Chunk ${i + 1} failed:`, e);
           }
+          // 청크 간 쿨다운
+          if (i + 1 < chunks.length) {
+            await new Promise(r => setTimeout(r, 3000));
+          }
         }
+        console.log(`[MedStudy] 전체 파싱 완료: ${allParsedItems.length}개 항목`);
       }
 
       // 후처리: 그룹 헤더 제거 + 공통 발문 병합
