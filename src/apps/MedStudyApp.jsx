@@ -3820,9 +3820,11 @@ ${textChunk}
     return (c.front || "").toLowerCase().includes(search.toLowerCase()) ||
            (c.subject || "").toLowerCase().includes(search.toLowerCase());
   });
-  const filteredQ = (data.questions || []).filter(q =>
-    !search || (q.parsed_question || q.raw_question || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredQ = (data.questions || []).filter(q => {
+    if (!showArchivedQuestions && q.status === "archived_reference") return false;
+    if (!search) return true;
+    return (q.parsed_question || q.raw_question || "").toLowerCase().includes(search.toLowerCase());
+  });
 
   const reviewQueueQ = (data.questions || []).filter(q =>
     q.needs_review || q.status === "conflict" || q.status === "unstable_parse"
