@@ -1503,6 +1503,7 @@ function ReviewPage({ data, updateSrs, logReview, showToast, getDueCards, getUpc
   const [startTime, setStartTime] = useState(null);
   const [sessionLog, setSessionLog] = useState([]);
   const [selectedMode, setSelectedMode] = useState(lastMileMode || "normal");
+  const [subject, setSubject] = useState("전체");
 
   useEffect(() => {
     if (exitSessionSignal > 0 && sessionCards !== null) {
